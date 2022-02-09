@@ -45,20 +45,10 @@ async function handleWord(thisword: string, wordTable: string, serverSchema: str
     }
     const usesQuery = await query({sql: "select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';"});
     var uses: Number = 1;
-    //@ts-ignore
-    if(usesQuery !== undefined) {
+    try {
       // @ts-ignore
-      if(usesQuery["results"] !== undefined) {
-        // @ts-ignore
-        if(usesQuery["results"][0] !== undefined) {
-          // @ts-ignore
-          if(usesQuery["results"][0]["uses"] !== undefined) {
-            // @ts-ignore
-            uses = usesQuery["results"][0]["uses"] + 1;
-          }
-        }
-      }
-    }
+      uses = usesQuery["results"][0]["uses"] + 1;
+    } catch { }
 
     await query({sql: "insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";"});
 }
