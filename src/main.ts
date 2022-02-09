@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { TextBasedChannel, Intents, Interaction, Message } from "discord.js";
+import { TextBasedChannel, Intents, Interaction, Message, StringMappedInteractionTypes } from "discord.js";
 import { Client } from "discordx";
 import { dirname, importx } from "@discordx/importer";
 import { Koa } from "@discordx/koa";
@@ -15,12 +15,22 @@ var con = MySQL.createConnection({
 
 const query = util.promisify(con.query).bind(con);
 
-async function resolveName(s: string, db: string): Promise<string> {
+async function resolveName(s: string, db: string, message: Message): Promise<string> {
   s = v.trim(s, "<@!>");
+  if(s.length == 17 || s.length == 18) {
+    if(parseInt(s) != NaN) {
+      // it's a numeric ID already, just return it.
+      return s;
+    }
+  }
   const results: any = await query({sql: "select id from " + db + " where name=\'" + s + "\';"});
   try {
     s = results[0]["id"];
-  } catch { }
+  } catch {
+    // no one by that name.
+    message.reply("I don't know anyone by that name.");
+    return "";
+  }
   return s;
 }
 
@@ -80,7 +90,8 @@ async function handleMessage(message: Message, runCommands: boolean) {
   }
 
   if(message.content.toLowerCase().startsWith("favoriteword ") && runCommands) {
-    var person: string = await resolveName(v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>"), serverSchema + "nicknames");
+    var person: string = await resolveName(v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>"), serverSchema + "nicknames", message);
+    if(person === "") return;
     if(person === undefined) {
       message.reply("format: favoriteword (@ person)");
       return;
@@ -124,7 +135,8 @@ async function handleMessage(message: Message, runCommands: boolean) {
       message.reply("format: wordcount (@ person) (single word)");
       return;
     }
-    var person: string = await resolveName(parameters[1], serverSchema + "nicknames");
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
     var word: string = parameters[2].replace("\'", "\'\'");
     var thisWordTable: string = serverSchema + "u" + person;
     try {
@@ -143,7 +155,8 @@ async function handleMessage(message: Message, runCommands: boolean) {
       message.reply("format: addname (@ person) (single word)");
       return;
     }
-    var person: string = await resolveName(parameters[1], serverSchema + "nicknames");
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
     var nickname: string = parameters[2].replace("\'", "\'\'");
     var thisNameTable: string = serverSchema + "nicknames";
 
