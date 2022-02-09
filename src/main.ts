@@ -4,7 +4,8 @@ import { Client } from "discordx";
 import { dirname, importx } from "@discordx/importer";
 import { Koa } from "@discordx/koa";
 import * as MySQL from "mysql";
-import v from "voca";
+import v, { replace } from "voca";
+import util from "util";
 
 var con = MySQL.createConnection({
   host: "127.0.0.1",
@@ -25,48 +26,44 @@ function query({ sql = "", params = Object.create(null) }) {
   });
 }
 
-function handleWord(words: Array<string>, wordTable: string, serverSchema: string) {
-    var word = v.trim(words[0].replace("\'", "\'\'"), " .,?!<>@#[]();:").toLowerCase();
-    if(word.length > 50) {
-      words.shift();
-      if(words[0] !== undefined)
-        handleWord(words, wordTable, serverSchema);
-      else
-        console.log("handled message.");
-      return;
+function sqlstring(s: string): string {
+  s = v.trim(s, "\'").replace("\'", "\'\'").toLowerCase();
+  const allowedSymbols = "abcdefghijklmnopqrstuvwxyz\'";
+  var newstring = "";
+  for(var c = 0; c < s.length; c++) {
+    if(allowedSymbols.includes(s[c])) {
+      newstring += s[c];
     }
-    if(word.length === 18 || word.length === 17) {
-      // might be an id
-      if(Number(word) != NaN) {
-        words.shift();
-        if(words[0] !== undefined)
-          handleWord(words, wordTable, serverSchema);
-        else
-          console.log("handled message.");
-        return;
-      }
-    }
-    query({sql: "select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';"}).then(results => {
-      var uses: Number = 1;
-      //@ts-ignore
-      if(results !== undefined) {
-        // @ts-ignore
-        if(results["results"][0] !== undefined) {
-          // @ts-ignore
-          uses = results["results"][0]["uses"] + 1;
-        }
-      }
-      query({sql: "insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";"}).then(results => {
-        words.shift();
-        if(words[0] !== undefined)
-          handleWord(words, wordTable, serverSchema);
-        else
-          console.log("handled message.");
-      });
-    });
+  }
+  return newstring;
 }
 
-function handleMessage(message: Message) {
+async function handleWord(thisword: string, wordTable: string, serverSchema: string) {
+    var word = sqlstring(thisword);
+    if(word.length > 50) {
+      return;
+    }
+    const usesQuery = await query({sql: "select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';"});
+    var uses: Number = 1;
+    //@ts-ignore
+    if(usesQuery !== undefined) {
+      // @ts-ignore
+      if(usesQuery["results"] !== undefined) {
+        // @ts-ignore
+        if(usesQuery["results"][0] !== undefined) {
+          // @ts-ignore
+          if(usesQuery["results"][0]["uses"] !== undefined) {
+            // @ts-ignore
+            uses = usesQuery["results"][0]["uses"] + 1;
+          }
+        }
+      }
+    }
+
+    await query({sql: "insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";"});
+}
+
+async function handleMessage(message: Message) {
   var wordArray: Array<string>;
   var serverSchema: string = "s" + message.guild!.id + ".";
 
@@ -78,22 +75,14 @@ function handleMessage(message: Message) {
     }
     var thisWordTable: string = serverSchema + "u" + person + "_words";
     var tempTable: string = serverSchema + "temp_table_" + Math.round(Math.random() * 10000);
-    query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"}).then(results => {
-      query({sql: "select * from " + tempTable + " where uses = (select max(uses) from " + tempTable + ");"}).then(results2 => {
-        //@ts-ignore
-        var uses: number = results2["results"][0]["uses"];
-        //@ts-ignore
-        var word: string = results2["results"][0]["word"];
-        message.reply("Favorite word is " + word + " with " + uses + " use" + (uses > 1 ? "s" : "") + ".");
-        query({sql: "drop table " + tempTable + ";"});
-      }, err => { if (err) throw err; } ).catch((error) => {
-        message.reply("No words with 6 or more characters found. Lurk less.");
-      });
-    }).catch((error) => {
-      //if(error.code === "ER_NO_SUCH_TABLE") {
-        message.reply(error.code);
-      //}
-    })
+    await query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"});
+    const results = await query({sql: "select * from " + tempTable + " where uses = (select max(uses) from " + tempTable + ");"});
+    //@ts-ignore
+    var uses: number = results["results"][0]["uses"];
+    //@ts-ignore
+    var word: string = results["results"][0]["word"];
+    message.reply("Favorite word is " + word + " with " + uses + " use" + (uses > 1 ? "s" : "") + ".");
+    await query({sql: "drop table " + tempTable + ";"});
     return;
   }
 
@@ -106,13 +95,10 @@ function handleMessage(message: Message) {
     var person: string = v.trim(parameters[1], "<@!>");
     var word: string = parameters[2].replace("\'", "\'\'");
     var thisWordTable: string = "u" + person + "_words";
-    query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"}).then(results => {
-      //@ts-ignore
-      var uses: number = results["results"][0]["uses"];
-      message.reply("User has said \"" + word + "\" " + uses + " time" + (uses > 1 ? "s" : "") + ".");
-    }).catch((error) => {
-        message.reply("That person hasn't used that word.");
-    });
+    const results = await query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"});
+    //@ts-ignore
+    var uses: number = results["results"][0]["uses"];
+    message.reply("User has said \"" + word + "\" " + uses + " time" + (uses > 1 ? "s" : "") + ".");
     return;
   }
 
@@ -120,12 +106,15 @@ function handleMessage(message: Message) {
   var wordTable: string = "u" + message.author.id + "_words";
 
   // make tables for user
-  query({sql: "insert into " + serverSchema + "users (id) select \'" + message.author.id + "\' from dual where not exists (select id from " + serverSchema + "users where id=\'" + message.author.id + "\');"});
-  query({sql: "create table if not exists " + serverSchema + wordTable + "(word varchar(50), uses bigint, primary key(word));"});
-  query({sql: "create table if not exists " + serverSchema + nameTable + "(word varchar(50), uses bigint);"});
+  await query({sql: "insert into " + serverSchema + "users (id) select \'" + message.author.id + "\' from dual where not exists (select id from " + serverSchema + "users where id=\'" + message.author.id + "\');"});
+  await query({sql: "create table if not exists " + serverSchema + wordTable + "(word varchar(50), uses bigint, primary key(word));"});
+  await query({sql: "create table if not exists " + serverSchema + nameTable + "(word varchar(50), uses bigint);"});
 
   var words: Array<string> = message.content.trim().replace("\n", " ").split(" ");
-  handleWord(words, wordTable, serverSchema);
+  do {
+    await handleWord(words[0], wordTable, serverSchema);
+    words.shift();
+  } while(words[0] !== undefined)
 }
 
 export const client = new Client({
