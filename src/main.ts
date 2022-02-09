@@ -67,6 +67,22 @@ async function handleMessage(message: Message) {
   var wordArray: Array<string>;
   var serverSchema: string = "s" + message.guild!.id + ".";
 
+  if(message.content.toLowerCase().startsWith("indexchannels ")) {
+    message.mentions.channels.forEach(async channel => {
+      console.log("indexing " + channel.id + "...");
+      var messageList = new Array<Message<boolean>>();
+      const messages = await channel.messages.fetch();
+      messages.forEach(thisMessage => {
+        messageList.push(thisMessage);
+      })
+      do {
+        await handleMessage(messageList[0]);
+        messageList.shift();
+      } while(messageList[0] !== undefined);
+      console.log("indexed " + channel.id + ".");
+    })
+  }
+
   if(message.content.toLowerCase().startsWith("favoriteword ")) {
     var person: string = v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>");
     if(person === undefined) {
@@ -75,7 +91,12 @@ async function handleMessage(message: Message) {
     }
     var thisWordTable: string = serverSchema + "u" + person + "_words";
     var tempTable: string = serverSchema + "temp_table_" + Math.round(Math.random() * 10000);
-    await query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"});
+    try {
+      await query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"});
+    } catch (error) {
+      message.reply("came up empty on that one.");
+      return;
+    }
     const results = await query({sql: "select * from " + tempTable + " where uses = (select max(uses) from " + tempTable + ");"});
     //@ts-ignore
     var uses: number = results["results"][0]["uses"];
@@ -95,10 +116,14 @@ async function handleMessage(message: Message) {
     var person: string = v.trim(parameters[1], "<@!>");
     var word: string = parameters[2].replace("\'", "\'\'");
     var thisWordTable: string = "u" + person + "_words";
-    const results = await query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"});
-    //@ts-ignore
-    var uses: number = results["results"][0]["uses"];
-    message.reply("User has said \"" + word + "\" " + uses + " time" + (uses > 1 ? "s" : "") + ".");
+    try {
+      const results = await query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"});
+      //@ts-ignore
+      var uses: number = results["results"][0]["uses"];
+      message.reply("User has said \"" + word + "\" " + uses + " time" + (uses > 1 ? "s" : "") + ".");
+    } catch {
+      message.reply("came up empty on that one.");
+    }
     return;
   }
 
