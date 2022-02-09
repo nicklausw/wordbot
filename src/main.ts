@@ -4,7 +4,7 @@ import { Client } from "discordx";
 import { dirname, importx } from "@discordx/importer";
 import { Koa } from "@discordx/koa";
 import * as MySQL from "mysql";
-import v, { replace } from "voca";
+import v from "voca";
 import util from "util";
 
 var con = MySQL.createConnection({
@@ -13,18 +13,7 @@ var con = MySQL.createConnection({
   password: process.env.SQL_PASS
 });
 
-function query({ sql = "", params = Object.create(null) }) {
-  return new Promise((resolve, reject) => {
-    //console.log(sql);
-    con.query(
-      sql,
-      params,
-      (err, results: any, fields) => {
-        if (err) { reject(err); } else { resolve({ results, fields }); }
-      },
-    );
-  });
-}
+const query = util.promisify(con.query).bind(con);
 
 function sqlstring(s: string): string {
   s = v.trim(s, "\'").replace("\'", "\'\'").toLowerCase();
