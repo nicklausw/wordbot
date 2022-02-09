@@ -15,6 +15,15 @@ var con = MySQL.createConnection({
 
 const query = util.promisify(con.query).bind(con);
 
+async function resolveName(s: string, db: string): Promise<string> {
+  s = v.trim(s, "<@!>");
+  const results: any = await query({sql: "select id from " + db + " where name=\'" + s + "\';"});
+  try {
+    s = results[0]["id"];
+  } catch { }
+  return s;
+}
+
 function sqlstring(s: string): string {
   s = v.trim(s, "\'").replace("\'", "\'\'").toLowerCase();
   const allowedSymbols = "abcdefghijklmnopqrstuvwxyz\'";
@@ -67,12 +76,12 @@ async function handleMessage(message: Message, runCommands: boolean) {
   }
 
   if(message.content.toLowerCase().startsWith("favoriteword ") && runCommands) {
-    var person: string = v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>");
+    var person: string = await resolveName(v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>"), serverSchema + "nicknames");
     if(person === undefined) {
       message.reply("format: favoriteword (@ person)");
       return;
     }
-    var thisWordTable: string = serverSchema + "u" + person + "_words";
+    var thisWordTable: string = serverSchema + "u" + person;
     var tempTable: string = serverSchema + "temp_table_" + Math.round(Math.random() * 10000);
     try {
       await query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"});
@@ -83,7 +92,9 @@ async function handleMessage(message: Message, runCommands: boolean) {
         words.push(e["word"]);
         uses = e["uses"];
       });
-      if(words.length === 1) {
+      if(words.length === 0) {
+        message.reply("No words found. Lurk less.");
+      } else if(words.length === 1) {
         message.reply("Favorite word is " + words[0] + " with " + uses + " use" + (uses > 1 ? "s" : "") + ".");
       } else {
         var response: string = "Favorite words are ";
@@ -109,9 +120,9 @@ async function handleMessage(message: Message, runCommands: boolean) {
       message.reply("format: wordcount (@ person) (single word)");
       return;
     }
-    var person: string = v.trim(parameters[1], "<@!>");
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames");
     var word: string = parameters[2].replace("\'", "\'\'");
-    var thisWordTable: string = serverSchema + "u" + person + "_words";
+    var thisWordTable: string = serverSchema + "u" + person;
     try {
       const results: any = await query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"});
       var uses: number = results[0]["uses"];
@@ -122,13 +133,34 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  var nameTable: string = "u" + message.author.id + "_nicknames";
-  var wordTable: string = "u" + message.author.id + "_words";
+  if(message.content.toLowerCase().startsWith("addname ") && runCommands) {
+    var parameters: Array<string> = message.content.toLowerCase().split(" ");
+    if(parameters.length != 3) {
+      message.reply("format: addname (@ person) (single word)");
+      return;
+    }
+    var person: string = v.trim(parameters[1], "<@!>");
+    var nickname: string = parameters[2].replace("\'", "\'\'");
+    var thisNameTable: string = serverSchema + "nicknames";
+
+    if(nickname.toLowerCase() !== sqlstring(nickname)) {
+      message.reply("nicknames can only have letters and apostrophes.");
+    }
+    nickname = sqlstring(nickname);
+
+    try {
+      await query({sql: "insert into " + thisNameTable + " (name, id) values (" + "\'" + nickname + "\', " + person + ") on duplicate key update id = " + person + ";"});
+    } catch (error) {
+      throw error;
+    }
+    return;
+  }
+
+  var wordTable: string = "u" + message.author.id;
 
   // make tables for user
   await query({sql: "insert into " + serverSchema + "users (id) select \'" + message.author.id + "\' from dual where not exists (select id from " + serverSchema + "users where id=\'" + message.author.id + "\');"});
   await query({sql: "create table if not exists " + serverSchema + wordTable + "(word varchar(50), uses bigint, primary key(word));"});
-  await query({sql: "create table if not exists " + serverSchema + nameTable + "(word varchar(50), uses bigint);"});
 
   var words: Array<string> = message.content.trim().replace("\n", " ").split(" ");
   do {
@@ -142,6 +174,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
 async function newMessage(message: Message, runCommands: boolean) {
   await query({sql: "create schema if not exists s" + message.guild!.id + ";"});
   await query({sql: "create table if not exists s" + message.guild!.id + ".users(id varchar(50));"});
+  await query({sql: "create table if not exists s" + message.guild!.id + ".nicknames(name varchar(50), id varchar(50), primary key(name));"});
   await handleMessage(message, runCommands);
 }
 
