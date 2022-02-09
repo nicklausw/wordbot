@@ -143,14 +143,20 @@ async function handleMessage(message: Message, runCommands: boolean) {
       message.reply("format: addname (@ person) (single word)");
       return;
     }
-    var person: string = v.trim(parameters[1], "<@!>");
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames");
     var nickname: string = parameters[2].replace("\'", "\'\'");
     var thisNameTable: string = serverSchema + "nicknames";
 
     if(nickname.toLowerCase() !== sqlstring(nickname)) {
       message.reply("nicknames can only have letters and apostrophes.");
+      return;
     }
     nickname = sqlstring(nickname);
+
+    if(nickname.length > 50) {
+      message.reply("nicknames can't be longer than 50 characters.");
+      return;
+    }
 
     try {
       await query({sql: "insert into " + thisNameTable + " (name, id) values (" + "\'" + nickname + "\', " + person + ") on duplicate key update id = " + person + ";"});
