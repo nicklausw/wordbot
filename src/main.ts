@@ -24,6 +24,7 @@ function query({ sql = "", params = Object.create(null) }) {
     );
   });
 }
+
 function handleWord(words: Array<string>, wordTable: string, serverSchema: string) {
     var word = v.trim(words[0].replace("\'", "\'\'"), " .,?!<>@#[]();:").toLowerCase();
     query({sql: "select uses from " + serverSchema + "." + wordTable + " where word=\'" + word + "\';"}).then(results => {
@@ -33,7 +34,7 @@ function handleWord(words: Array<string>, wordTable: string, serverSchema: strin
         // @ts-ignore
         if(results["results"][0] !== undefined) {
           // @ts-ignore
-          uses = JSON.parse(JSON.stringify(results["results"][0]["uses"])) + 1;
+          uses = results["results"][0]["uses"] + 1;
         }
       }
       query({sql: "insert into " + serverSchema + "." + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";"}).then(results => {
@@ -115,9 +116,9 @@ client.on("messageCreate", (message: Message) => {
     var thisWordTable: string = "u" + person + "_words";
     query({sql: "select * from " + serverSchema + "." + thisWordTable + " where uses = (select max(uses) from " + serverSchema + "." + thisWordTable + ");"}).then(results => {
       //@ts-ignore
-      var uses: number = JSON.parse(JSON.stringify(results["results"][0]["uses"]));
+      var uses: number = results["results"][0]["uses"];
       //@ts-ignore
-      var word: string = JSON.parse(JSON.stringify(results["results"][0]["word"]));
+      var word: string = results["results"][0]["word"];
       message.reply("Favorite word is " + word + " with " + uses + " uses.");
     }).catch((error) => {
       //if(error.code === "ER_NO_SUCH_TABLE") {
@@ -138,7 +139,7 @@ client.on("messageCreate", (message: Message) => {
     var thisWordTable: string = "u" + person + "_words";
     query({sql: "select * from " + serverSchema + "." + thisWordTable + " where word = \'" + word + "\';"}).then(results => {
       //@ts-ignore
-      var uses: number = JSON.parse(JSON.stringify(results["results"][0]["uses"]));
+      var uses: number = results["results"][0]["uses"];
       message.reply("User has said \"" + word + "\" " + uses + " times.");
     }).catch((error) => {
         message.reply("That person hasn't used that word.");
