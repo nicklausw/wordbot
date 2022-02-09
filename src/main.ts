@@ -30,10 +30,21 @@ function handleWord(words: Array<string>, wordTable: string, serverSchema: strin
     if(word.length > 50) {
       words.shift();
       if(words[0] !== undefined)
+        handleWord(words, wordTable, serverSchema);
+      else
+        console.log("handled message.");
+      return;
+    }
+    if(word.length === 18 || word.length === 17) {
+      // might be an id
+      if(Number(word) != NaN) {
+        words.shift();
+        if(words[0] !== undefined)
           handleWord(words, wordTable, serverSchema);
         else
           console.log("handled message.");
         return;
+      }
     }
     query({sql: "select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';"}).then(results => {
       var uses: Number = 1;
@@ -73,9 +84,11 @@ function handleMessage(message: Message) {
         var uses: number = results2["results"][0]["uses"];
         //@ts-ignore
         var word: string = results2["results"][0]["word"];
-        message.reply("Favorite word is " + word + " with " + uses + " uses.");
+        message.reply("Favorite word is " + word + " with " + uses + " use" + (uses > 1 ? "s" : "") + ".");
         query({sql: "drop table " + tempTable + ";"});
-      }, err => { if (err) throw err; } );
+      }, err => { if (err) throw err; } ).catch((error) => {
+        message.reply("No words with 6 or more characters found. Lurk less.");
+      });
     }).catch((error) => {
       //if(error.code === "ER_NO_SUCH_TABLE") {
         message.reply(error.code);
@@ -96,7 +109,7 @@ function handleMessage(message: Message) {
     query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"}).then(results => {
       //@ts-ignore
       var uses: number = results["results"][0]["uses"];
-      message.reply("User has said \"" + word + "\" " + uses + " times.");
+      message.reply("User has said \"" + word + "\" " + uses + " time" + (uses > 1 ? "s" : "") + ".");
     }).catch((error) => {
         message.reply("That person hasn't used that word.");
     });
