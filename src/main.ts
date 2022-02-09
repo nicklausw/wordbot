@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { Intents, Interaction, Message } from "discord.js";
+import { TextBasedChannel, Intents, Interaction, Message } from "discord.js";
 import { Client } from "discordx";
 import { dirname, importx } from "@discordx/importer";
 import { Koa } from "@discordx/koa";
@@ -15,7 +15,7 @@ var con = MySQL.createConnection({
 
 function query({ sql = "", params = Object.create(null) }) {
   return new Promise((resolve, reject) => {
-    console.log(sql);
+    //console.log(sql);
     con.query(
       sql,
       params,
@@ -63,12 +63,15 @@ async function handleWord(thisword: string, wordTable: string, serverSchema: str
     await query({sql: "insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";"});
 }
 
-async function handleMessage(message: Message) {
+async function handleMessage(message: Message, isNew: boolean) {
   var wordArray: Array<string>;
   var serverSchema: string = "s" + message.guild!.id + ".";
 
+  if(isNew) console.log("processing message from " + message.author.id + "...");
+
   if(message.content.toLowerCase().startsWith("indexchannels ")) {
-    message.mentions.channels.forEach(async channel => {
+    for(var c = 0; c < message.mentions.channels.size; c++) {
+      var channel : TextBasedChannel = message.mentions.channels.get(message.mentions.channels.keyAt(c)!)!;
       console.log("indexing " + channel.id + "...");
       var messageList = new Array<Message<boolean>>();
       const messages = await channel.messages.fetch();
@@ -76,11 +79,13 @@ async function handleMessage(message: Message) {
         messageList.push(thisMessage);
       })
       do {
-        await handleMessage(messageList[0]);
+        await handleMessage(messageList[0], false);
         messageList.shift();
       } while(messageList[0] !== undefined);
       console.log("indexed " + channel.id + ".");
-    })
+    }
+    console.log("processed message from " + message.author.id + ".");
+    return;
   }
 
   if(message.content.toLowerCase().startsWith("favoriteword ")) {
@@ -140,6 +145,8 @@ async function handleMessage(message: Message) {
     await handleWord(words[0], wordTable, serverSchema);
     words.shift();
   } while(words[0] !== undefined)
+
+  if(isNew) console.log("processed message from " + message.author.id + ".");
 }
 
 export const client = new Client({
@@ -196,7 +203,7 @@ client.on("messageCreate", (message: Message) => {
 
   query({sql: "create schema if not exists s" + message.guild!.id + ";"}).then(x => {
     query({sql: "create table if not exists s" + message.guild!.id + ".users(id varchar(50));"});
-    handleMessage(message);
+    handleMessage(message, true);
   });
 });
 
