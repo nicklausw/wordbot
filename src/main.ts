@@ -55,6 +55,66 @@ function handleWord(words: Array<string>, wordTable: string, serverSchema: strin
     });
 }
 
+function handleMessage(message: Message) {
+  var wordArray: Array<string>;
+  var serverSchema: string = "s" + message.guild!.id + ".";
+
+  if(message.content.toLowerCase().startsWith("favoriteword ")) {
+    var person: string = v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>");
+    if(person === undefined) {
+      message.reply("format: favoriteword (@ person)");
+      return;
+    }
+    var thisWordTable: string = serverSchema + "u" + person + "_words";
+    var tempTable: string = serverSchema + "temp_table_" + Math.round(Math.random() * 10000);
+    query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"}).then(results => {
+      query({sql: "select * from " + tempTable + " where uses = (select max(uses) from " + tempTable + ");"}).then(results2 => {
+        //@ts-ignore
+        var uses: number = results2["results"][0]["uses"];
+        //@ts-ignore
+        var word: string = results2["results"][0]["word"];
+        message.reply("Favorite word is " + word + " with " + uses + " uses.");
+        query({sql: "drop table " + tempTable + ";"});
+      }, err => { if (err) throw err; } );
+    }).catch((error) => {
+      //if(error.code === "ER_NO_SUCH_TABLE") {
+        message.reply(error.code);
+      //}
+    })
+    return;
+  }
+
+  if(message.content.toLowerCase().startsWith("wordcount ")) {
+    var parameters: Array<string> = message.content.toLowerCase().split(" ");
+    if(parameters.length != 3) {
+      message.reply("format: wordcount (@ person) (single word)");
+      return;
+    }
+    var person: string = v.trim(parameters[1], "<@!>");
+    var word: string = parameters[2].replace("\'", "\'\'");
+    var thisWordTable: string = "u" + person + "_words";
+    query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"}).then(results => {
+      //@ts-ignore
+      var uses: number = results["results"][0]["uses"];
+      message.reply("User has said \"" + word + "\" " + uses + " times.");
+    }).catch((error) => {
+        message.reply("That person hasn't used that word.");
+    });
+    return;
+  }
+
+  var nameTable: string = "u" + message.author.id + "_nicknames";
+  var wordTable: string = "u" + message.author.id + "_words";
+
+  // make tables for user
+  query({sql: "insert into " + serverSchema + "users (id) select \'" + message.author.id + "\' from dual where not exists (select id from " + serverSchema + "users where id=\'" + message.author.id + "\');"});
+  query({sql: "create table if not exists " + serverSchema + wordTable + "(word varchar(50), uses bigint, primary key(word));"});
+  query({sql: "create table if not exists " + serverSchema + nameTable + "(word varchar(50), uses bigint);"});
+
+  var words: Array<string> = message.content.trim().replace("\n", " ").split(" ");
+  handleWord(words, wordTable, serverSchema);
+}
+
 export const client = new Client({
  simpleCommand: {
     prefix: "!",
@@ -94,12 +154,7 @@ client.once("ready", async () => {
   con.connect(function(err: any) {
     if (err) throw err;
   });
-  
-  client.guilds.cache.forEach(guild => {
-    query({sql: "create schema if not exists s" + guild.id + ";"}).then(x => {
-      query({sql: "create table if not exists s" + guild.id + ".users(id varchar(50));"});
-    });
-  })
+
   console.log("MySQL started");
 });
 
@@ -112,63 +167,10 @@ client.on("messageCreate", (message: Message) => {
   
   console.log("received message from " + message.author.id + "...");
 
-  var wordArray: Array<string>;
-  var serverSchema: string = "s" + message.guild!.id + ".";
-
-  if(message.content.toLowerCase().startsWith("favoriteword ")) {
-    var person: string = v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>");
-    if(person === undefined) {
-      message.reply("format: favoriteword (@ person)");
-      return;
-    }
-    var thisWordTable: string = serverSchema + "u" + person + "_words";
-    var tempTable: string = serverSchema + "temp_table_" + Math.round(Math.random() * 10000);
-    query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"}).then(results => {
-      query({sql: "select * from " + tempTable + " where uses = (select max(uses) from " + tempTable + ");"}).then(results2 => {
-        //@ts-ignore
-        var uses: number = results2["results"][0]["uses"];
-        //@ts-ignore
-        var word: string = results2["results"][0]["word"];
-        message.reply("Favorite word is " + word + " with " + uses + " uses.");
-        query({sql: "drop table " + tempTable});
-      }, err => { if (err) throw err; } );
-    }).catch((error) => {
-      //if(error.code === "ER_NO_SUCH_TABLE") {
-        message.reply(error.code);
-      //}
-    })
-    return;
-  }
-
-  if(message.content.toLowerCase().startsWith("wordcount ")) {
-    var parameters: Array<string> = message.content.toLowerCase().split(" ");
-    if(parameters.length != 3) {
-      message.reply("format: wordcount (@ person) (single word)");
-      return;
-    }
-    var person: string = v.trim(parameters[1], "<@!>");
-    var word: string = parameters[2].replace("\'", "\'\'");
-    var thisWordTable: string = "u" + person + "_words";
-    query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"}).then(results => {
-      //@ts-ignore
-      var uses: number = results["results"][0]["uses"];
-      message.reply("User has said \"" + word + "\" " + uses + " times.");
-    }).catch((error) => {
-        message.reply("That person hasn't used that word.");
-    });
-    return;
-  }
-
-  var nameTable: string = "u" + message.author.id + "_nicknames";
-  var wordTable: string = "u" + message.author.id + "_words";
-
-  // make tables for user
-  query({sql: "insert into " + serverSchema + "users (id) select \'" + message.author.id + "\' from dual where not exists (select id from " + serverSchema + "users where id=\'" + message.author.id + "\');"});
-  query({sql: "create table if not exists " + serverSchema + wordTable + "(word varchar(50), uses bigint, primary key(word));"});
-  query({sql: "create table if not exists " + serverSchema + nameTable + "(word varchar(50), uses bigint);"});
-
-  var words: Array<string> = message.content.trim().split(" ");
-  handleWord(words, wordTable, serverSchema);
+  query({sql: "create schema if not exists s" + message.guild!.id + ";"}).then(x => {
+    query({sql: "create table if not exists s" + message.guild!.id + ".users(id varchar(50));"});
+    handleMessage(message);
+  });
 });
 
 async function run() {
