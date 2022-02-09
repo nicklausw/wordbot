@@ -40,7 +40,7 @@ function sqlstring(s: string): string {
 
 async function handleWord(thisword: string, wordTable: string, serverSchema: string) {
     var word = sqlstring(thisword);
-    if(word.length > 50) {
+    if(word.length > 50 || word === "") {
       return;
     }
     const usesQuery = await query({sql: "select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';"});
@@ -69,7 +69,7 @@ async function handleMessage(message: Message, isNew: boolean) {
 
   if(isNew) console.log("processing message from " + message.author.id + "...");
 
-  if(message.content.toLowerCase().startsWith("indexchannels ")) {
+  if(message.content.toLowerCase().startsWith("indexchannels ") && isNew) {
     for(var c = 0; c < message.mentions.channels.size; c++) {
       var channel : TextBasedChannel = message.mentions.channels.get(message.mentions.channels.keyAt(c)!)!;
       console.log("indexing " + channel.id + "...");
@@ -88,7 +88,7 @@ async function handleMessage(message: Message, isNew: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("favoriteword ")) {
+  if(message.content.toLowerCase().startsWith("favoriteword ") && isNew) {
     var person: string = v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>");
     if(person === undefined) {
       message.reply("format: favoriteword (@ person)");
@@ -112,7 +112,7 @@ async function handleMessage(message: Message, isNew: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("wordcount ")) {
+  if(message.content.toLowerCase().startsWith("wordcount ") && isNew) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 3) {
       message.reply("format: wordcount (@ person) (single word)");
@@ -198,8 +198,6 @@ client.on("interactionCreate", (interaction: Interaction) => {
 
 client.on("messageCreate", (message: Message) => {
   if(message.author.id === client.user!.id) return;
-  
-  console.log("received message from " + message.author.id + "...");
 
   query({sql: "create schema if not exists s" + message.guild!.id + ";"}).then(x => {
     query({sql: "create table if not exists s" + message.guild!.id + ".users(id varchar(50));"});
