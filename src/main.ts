@@ -35,7 +35,7 @@ async function handleWord(thisword: string, wordTable: string, serverSchema: str
     const usesQuery: any = await query({sql: "select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';"});
     var uses: Number = 1;
     try {
-      uses = usesQuery["results"][0]["uses"] + 1;
+      uses = usesQuery[0]["uses"] + 1;
     } catch { }
 
     await query({sql: "insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";"});
