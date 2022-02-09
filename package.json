@@ -1,28 +1,7 @@
 {
-  "name": "discord.ts-example",
+  "name": "wordbot",
   "version": "1.0.0",
-  "description": "discordx bot example",
-  "keywords": [
-    "discordx",
-    "discord.ts",
-    "discord.js",
-    "bot",
-    "discord",
-    "typescript"
-  ],
-  "homepage": "https://github.com/oceanroleplay/discord.ts-example#readme",
-  "bugs": {
-    "url": "https://github.com/oceanroleplay/discord.ts-example/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/oceanroleplay/discord.ts-example.git"
-  },
   "license": "MIT",
-  "author": "Indian Ocean Roleplay",
-  "contributors": [
-    "Harry <indianoceanroleplay@gmail.com> (https://github.com/oceanroleplay)"
-  ],
   "type": "module",
   "main": "build/main.js",
   "scripts": {
