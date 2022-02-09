@@ -57,6 +57,10 @@ async function handleMessage(message: Message, runCommands: boolean) {
   if(runCommands) console.log("processing message from " + message.author.id + "...");
 
   if(message.content.toLowerCase().startsWith("indexchannels ") && runCommands) {
+    if(message.author.id !== "223609896086667264") {
+      message.reply("only Nick can do that.");
+      return;
+    }
     for(var c = 0; c < message.mentions.channels.size; c++) {
       var channel : TextBasedChannel = message.mentions.channels.get(message.mentions.channels.keyAt(c)!)!;
       console.log("indexing " + channel.id + "...");
