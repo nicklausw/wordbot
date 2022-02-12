@@ -180,7 +180,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     try {
       const results: any = await query({sql: "select count(*) from " + thisWordTable + ";"});
       var count = results[0]["count(*)"];
-      message.reply("User has said " + count + " words.");
+      message.reply("User has said " + count + " different words.");
     } catch {
       message.reply("USer hasn't said anything.");
     }
