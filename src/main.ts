@@ -46,6 +46,15 @@ function sqlstring(s: string): string {
   return newstring;
 }
 
+async function getWordCount(user: string, word: string, wordTable: string): Promise<number> {
+  try {
+    const results: any = await query({sql: "select * from " + wordTable + " where word = \'" + word + "\';"});
+    return results[0]["uses"];
+  } catch {
+    return 0;
+  }
+}
+
 async function handleWord(thisword: string, wordTable: string, serverSchema: string) {
     var word = sqlstring(thisword);
     if(word.length > 50 || word === "") {
@@ -97,7 +106,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
       return;
     }
     var thisWordTable: string = serverSchema + "u" + person;
-    var tempTable: string = serverSchema + "temp_table_" + Math.round(Math.random() * 10000);
+    var tempTable: string = serverSchema + "t" + Math.round(Math.random() * 10000);
     try {
       await query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"});
       const results: any = await query({sql: "select * from " + tempTable + " where uses = (select max(uses) from " + tempTable + ");"});
@@ -139,12 +148,36 @@ async function handleMessage(message: Message, runCommands: boolean) {
     if(person === "") return;
     var word: string = parameters[2].replace("\'", "\'\'");
     var thisWordTable: string = serverSchema + "u" + person;
-    try {
-      const results: any = await query({sql: "select * from " + thisWordTable + " where word = \'" + word + "\';"});
-      var uses: number = results[0]["uses"];
-      message.reply("User has said \"" + word + "\" " + uses + " time" + (uses > 1 ? "s" : "") + ".");
-    } catch {
+    var count = await getWordCount(person, word, thisWordTable);
+    if(count > 0) {
+      message.reply("User has said \"" + word + "\" " + count + " time" + (count > 1 ? "s" : "") + ".");
+    } else {
       message.reply("came up empty on that one.");
+    }
+    return;
+  }
+
+  if(message.content.toLowerCase().startsWith("serverwordcount") && runCommands) {
+    var parameters: Array<string> = message.content.toLowerCase().split(" ");
+    if(parameters.length != 2) {
+      message.reply("format: serverwordcount (single word)");
+      return;
+    }
+    var word: string = parameters[1].replace("\'", "\'\'");
+
+    var userCount: number;
+    var totalWordCount = 0;
+
+    const countResults: any = await query({sql: "select count(*) from " + serverSchema + "users;"});
+    userCount = countResults[0]["count(*)"];
+    const userQuery: any = await query({sql: "select * from " + serverSchema + "users;"});
+    for(var c = 0; c < userCount; c++) {
+      totalWordCount += await getWordCount(userQuery[c]["id"], word, serverSchema + "u" + userQuery[c]["id"]);
+    }
+    if(totalWordCount > 0) {
+      message.reply("Server has said " + word + " " + totalWordCount + " times.");
+    } else {
+      message.reply("Server hasn't said that word.");
     }
     return;
   }
@@ -168,6 +201,27 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
+  if(message.content.toLowerCase() == "servertotalwordcount" && runCommands) {
+    var userCount: number;
+    var totalWordCount = 0;
+
+    const countResults: any = await query({sql: "select count(*) from " + serverSchema + "users;"});
+    userCount = countResults[0]["count(*)"];
+    const userQuery: any = await query({sql: "select * from " + serverSchema + "users;"});
+    for(var c = 0; c < userCount; c++) {
+      var thisWordTable: string = serverSchema + "u" + userQuery[c]["id"];
+      const results: any = await query({sql: "select sum(uses) from " + thisWordTable + ";"});
+      var sum: number = results[0]["sum(uses)"];
+      totalWordCount += sum;
+    }
+    if(totalWordCount > 0) {
+      message.reply("Server has said " + totalWordCount + " total words.");
+    } else {
+      message.reply("Server hasn't said that word.");
+    }
+    return;
+  }
+
   if(message.content.toLowerCase().startsWith("vocabsize ") && runCommands) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 2) {
@@ -179,11 +233,38 @@ async function handleMessage(message: Message, runCommands: boolean) {
     var thisWordTable: string = serverSchema + "u" + person;
     try {
       const results: any = await query({sql: "select count(*) from " + thisWordTable + ";"});
-      var count = results[0]["count(*)"];
+      var count: number = await results[0]["count(*)"];
       message.reply("User has said " + count + " different words.");
     } catch {
-      message.reply("USer hasn't said anything.");
+      message.reply("User hasn't said anything.");
     }
+    return;
+  }
+
+  if(message.content.toLowerCase() === "servervocabsize" && runCommands) {
+    var userCount: number;
+
+    var tempTable: string = serverSchema + "t" + Math.round(Math.random() * 10000);
+    await query({sql: "create table " + tempTable + " (word varchar(50), primary key (word));"});
+
+    const countResults: any = await query({sql: "select count(*) from " + serverSchema + "users;"});
+    userCount = countResults[0]["count(*)"];
+    const userQuery: any = await query({sql: "select * from " + serverSchema + "users;"});
+    for(var c = 0; c < userCount; c++) {
+      try {
+        var thisWordTable = serverSchema + "u" + userQuery[c]["id"];
+        const results: any = await query({sql: "insert ignore into " + tempTable + " (word) (select word from " + thisWordTable + ");"});
+      } catch { }
+    }
+
+    const resultsQuery: any = await query({sql: "select count(*) from " + tempTable + ";"})
+    var totalVocabSize: number = resultsQuery[0]["count(*)"];
+    if(totalVocabSize > 0) {
+      message.reply("Server has said " + totalVocabSize + " different words.");
+    } else {
+      message.reply("Server hasn't said anything.");
+    }
+    await query({sql: "drop table " + tempTable + ";"});
     return;
   }
 
