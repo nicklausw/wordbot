@@ -149,6 +149,25 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
+  if(message.content.toLowerCase().startsWith("vocabsize ") && runCommands) {
+    var parameters: Array<string> = message.content.toLowerCase().split(" ");
+    if(parameters.length != 2) {
+      message.reply("format: vocabsize (@ person)");
+      return;
+    }
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
+    var thisWordTable: string = serverSchema + "u" + person;
+    try {
+      const results: any = await query({sql: "select count(*) from " + thisWordTable + ";"});
+      var count = results[0]["count(*)"];
+      message.reply("User has said " + count + " words.");
+    } catch {
+      message.reply("USer hasn't said anything.");
+    }
+    return;
+  }
+
   if(message.content.toLowerCase().startsWith("addname ") && runCommands) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 3) {
