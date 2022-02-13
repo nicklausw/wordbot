@@ -7,6 +7,7 @@ import { exec } from "child_process";
 import * as MySQL from "mysql";
 import v from "voca";
 import util from "util";
+import { MessageEmbed } from "discord.js";
 
 var con = MySQL.createConnection({
   host: "127.0.0.1",
@@ -15,6 +16,24 @@ var con = MySQL.createConnection({
 });
 
 const query = util.promisify(con.query).bind(con);
+
+function helpMessage(message: Message) {
+  const helpEmbed = new MessageEmbed()
+	.setTitle('bitchbot')
+	.setDescription('fully case-insensitive.')
+	.addFields(
+		{ name: "favoriteword (person)", value: "gets person's most used word." },
+		{ name: "wordcount (person) (word)", value: "gets number of times person has used word." },
+		{ name: "totalwordcount (person)", value: "gets number of words person has used in total" },
+    { name: "serverwordcount (word)", value: "gets number of times anyone in server has used word." },
+    { name: "servertotalwordcount", value: "gets total number of words used in server." },
+    { name: "vocabsize (person)", value: "gets number of unique words person has used" },
+    { name: "servervocabsize", value: "gets number of unique words server has used" },
+    { name: "addname (person) (name)", value: "add an alias to avoid mentioning someone repeatedly." }
+	);
+
+  message.reply({embeds: [helpEmbed]});
+}
 
 async function resolveName(s: string, db: string, message: Message): Promise<string> {
   s = v.trim(s, "<@!>");
@@ -76,7 +95,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
 
   if(runCommands) console.log("processing message from " + message.author.id + "...");
 
-  if(message.content.toLowerCase().startsWith("indexchannels ") && runCommands) {
+  if(message.content.toLowerCase().startsWith("indexchannels") && runCommands) {
     if(message.author.id !== "223609896086667264") {
       message.reply("only Nick can do that.");
       return;
@@ -99,13 +118,14 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("favoriteword ") && runCommands) {
-    var person: string = await resolveName(v.trim(message.content.toLowerCase().split("favoriteword ")[1], "<@!>"), serverSchema + "nicknames", message);
-    if(person === "") return;
-    if(person === undefined) {
-      message.reply("format: favoriteword (@ person)");
+  if(message.content.toLowerCase().startsWith("favoriteword") && runCommands) {
+    var parameters: Array<string> = message.content.toLowerCase().split(" ");
+    if(parameters.length != 2) {
+      helpMessage(message);
       return;
     }
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
     var thisWordTable: string = serverSchema + "u" + person;
     var tempTable: string = serverSchema + "t" + Math.round(Math.random() * 10000);
     try {
@@ -139,10 +159,10 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("wordcount ") && runCommands) {
+  if(message.content.toLowerCase().startsWith("wordcount") && runCommands) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 3) {
-      message.reply("format: wordcount (@ person) (single word)");
+      helpMessage(message);
       return;
     }
     var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
@@ -161,7 +181,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
   if(message.content.toLowerCase().startsWith("serverwordcount") && runCommands) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 2) {
-      message.reply("format: serverwordcount (single word)");
+      helpMessage(message);
       return;
     }
     var word: string = parameters[1].replace("\'", "\'\'");
@@ -183,10 +203,10 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("totalwordcount ") && runCommands) {
+  if(message.content.toLowerCase().startsWith("totalwordcount") && runCommands) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 2) {
-      message.reply("format: totalwordcount (@ person)");
+      helpMessage(message);
       return;
     }
     var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
@@ -223,10 +243,10 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("vocabsize ") && runCommands) {
+  if(message.content.toLowerCase().startsWith("vocabsize") && runCommands) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 2) {
-      message.reply("format: vocabsize (@ person)");
+      helpMessage(message);
       return;
     }
     var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
@@ -269,10 +289,10 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("addname ") && runCommands) {
+  if(message.content.toLowerCase().startsWith("addname") && runCommands) {
     var parameters: Array<string> = message.content.toLowerCase().split(" ");
     if(parameters.length != 3) {
-      message.reply("format: addname (@ person) (single word)");
+      helpMessage(message);
       return;
     }
     var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
@@ -296,6 +316,11 @@ async function handleMessage(message: Message, runCommands: boolean) {
     } catch (error) {
       throw error;
     }
+    return;
+  }
+
+  if(message.content.toLowerCase() === "bitchbothelp") {
+    helpMessage(message);
     return;
   }
 
