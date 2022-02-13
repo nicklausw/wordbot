@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { TextBasedChannel, Intents, Interaction, Message, StringMappedInteractionTypes } from "discord.js";
+import { TextBasedChannel, Intents, Interaction, Message, MessageEmbed } from "discord.js";
 import { Client } from "discordx";
 import { dirname, importx } from "@discordx/importer";
 import { Koa } from "@discordx/koa";
@@ -7,7 +7,6 @@ import { exec } from "child_process";
 import * as MySQL from "mysql";
 import v from "voca";
 import util from "util";
-import { MessageEmbed } from "discord.js";
 
 var dataChanged = false;
 
@@ -265,27 +264,31 @@ async function handleMessage(message: Message, runCommands: boolean) {
   if(message.content.toLowerCase() === "servervocabsize" && runCommands) {
     var userCount: number;
 
-    var tempTable: string = serverSchema + "t" + Math.round(Math.random() * 10000);
-    await query({sql: "create table " + tempTable + " (word varchar(50), primary key (word));"});
-
     const countResults: any = await query({sql: "select count(*) from " + serverSchema + "users;"});
     userCount = countResults[0]["count(*)"];
     const userQuery: any = await query({sql: "select * from " + serverSchema + "users;"});
+    var totalVocabSize = 0;
+    var uniqueWordList = new Array<string>();
     for(var c = 0; c < userCount; c++) {
+      var thisWordTable = serverSchema + "u" + userQuery[c]["id"];
       try {
-        var thisWordTable = serverSchema + "u" + userQuery[c]["id"];
-        const results: any = await query({sql: "insert ignore into " + tempTable + " (word) (select word from " + thisWordTable + ");"});
-      } catch { }
+        console.log("select count(*) from " + thisWordTable + ";");
+        const countResults: any = await query({sql: "select count(*) from " + thisWordTable + ";"});
+        const wordResults: any = await query({sql: "select word from " + thisWordTable + ";"});
+        for(var d = 0; d < countResults[0]["count(*)"]; d++) {
+          if(uniqueWordList.includes(wordResults[d]["word"]) === false) {
+            uniqueWordList.push(wordResults[d]["word"]);
+            totalVocabSize++;
+          }
+        }
+      } catch (error) { if(!(error instanceof TypeError)) throw error; }
     }
 
-    const resultsQuery: any = await query({sql: "select count(*) from " + tempTable + ";"})
-    var totalVocabSize: number = resultsQuery[0]["count(*)"];
     if(totalVocabSize > 0) {
       message.reply("Server has said " + totalVocabSize + " different words.");
     } else {
       message.reply("Server hasn't said anything.");
     }
-    await query({sql: "drop table " + tempTable + ";"});
     return;
   }
 
