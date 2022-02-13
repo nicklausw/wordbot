@@ -16,6 +16,7 @@ var con = MySQL.createConnection({
   password: process.env.SQL_PASS
 });
 
+// promise to get the query output.
 function query(sql = "", params = Object.create(null)) {
   return new Promise((resolve, reject) => {
     console.log(sql);
@@ -87,6 +88,7 @@ function helpMessage(message: Message) {
   message.reply({embeds: [helpEmbed]});
 }
 
+// get a nickname, or return a numerical ID.
 async function resolveName(s: string, db: string, message: Message): Promise<string> {
   s = v.trim(s, "<@!>");
   if(s.length == 17 || s.length == 18) {
@@ -105,6 +107,7 @@ async function resolveName(s: string, db: string, message: Message): Promise<str
   return s;
 }
 
+// make a string SQL-friendly.
 function sqlstring(s: string): string {
   s = v.trim(s, "\'").replace("\'", "\'\'").toLowerCase();
   const allowedSymbols = "abcdefghijklmnopqrstuvwxyz\'";
