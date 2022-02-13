@@ -70,8 +70,8 @@ function sqlstring(s: string): string {
 
 async function getWordCount(user: string, word: string, wordTable: string): Promise<number> {
   try {
-    const results: any = await query({sql: "select * from " + wordTable + " where word = \'" + word + "\';"});
-    return results[0]["uses"];
+    const results: any = await query({sql: "select sum(uses) from " + wordTable + " where word like \'%" + word + "%\';"});
+    return results[0]["sum(uses)"];
   } catch {
     return 0;
   }
@@ -130,10 +130,8 @@ async function handleMessage(message: Message, runCommands: boolean) {
     var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
     if(person === "") return;
     var thisWordTable: string = serverSchema + "u" + person;
-    var tempTable: string = serverSchema + "t" + Math.round(Math.random() * 10000);
     try {
-      await query({sql: "create table " + tempTable + " as select * from " + thisWordTable + " where length(word) > 5;"});
-      const results: any = await query({sql: "select * from " + tempTable + " where uses = (select max(uses) from " + tempTable + ");"});
+      const results: any = await query({sql: "select * from " + thisWordTable + " where uses = (select max(uses) from " + thisWordTable + " where length(word) > 5);"});
       var uses = 0;
       var words = new Array<string>();
       results.forEach(e => {
@@ -158,7 +156,6 @@ async function handleMessage(message: Message, runCommands: boolean) {
       message.reply("came up empty on that one.");
       return;
     }
-    await query({sql: "drop table " + tempTable + ";"});
     return;
   }
 
