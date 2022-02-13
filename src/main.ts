@@ -9,6 +9,8 @@ import v from "voca";
 import util from "util";
 import { MessageEmbed } from "discord.js";
 
+var dataChanged = false;
+
 var con = MySQL.createConnection({
   host: "127.0.0.1",
   user: "root",
@@ -87,6 +89,7 @@ async function handleWord(thisword: string, wordTable: string, serverSchema: str
     } catch { }
 
     await query({sql: "insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";"});
+    dataChanged = true;
 }
 
 async function handleMessage(message: Message, runCommands: boolean) {
@@ -313,6 +316,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
 
     try {
       await query({sql: "insert into " + thisNameTable + " (name, id) values (" + "\'" + nickname + "\', " + person + ") on duplicate key update id = " + person + ";"});
+      dataChanged = true;
     } catch (error) {
       throw error;
     }
@@ -442,19 +446,23 @@ async function execAsync(command: string) {
   })
 }
 
-async function exportEvery5Minutes() {
-  console.log("exporting to dump.sql...");
-  await execAsync("mysqldump --all-databases -u root -p --password=" + process.env.SQL_PASS + " >dump.sql");
-  console.log("exported to dump.sql.");
+async function exportSQL() {
+  if(dataChanged === true) {
+    dataChanged = false;
+    console.log("exporting to dump.sql...");
+    await execAsync("mysqldump --all-databases -u root -p --password=" + process.env.SQL_PASS + " >dump.sql");
+    console.log("exported to dump.sql.");
+  }
 }
 
 
 if(process.argv.length === 3) {
   if(process.argv[2] === "export") {
-    await exportEvery5Minutes();
+    dataChanged = true;
+    await exportSQL();
     process.exit();
   }
 }
 
-setInterval(exportEvery5Minutes, 60 * 5000)
+setInterval(exportSQL, 60 * 1000);
 run();
