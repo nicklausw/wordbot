@@ -3,6 +3,7 @@ import { TextBasedChannel, Intents, Interaction, Message, StringMappedInteractio
 import { Client } from "discordx";
 import { dirname, importx } from "@discordx/importer";
 import { Koa } from "@discordx/koa";
+import { exec } from "child_process";
 import * as MySQL from "mysql";
 import v from "voca";
 import util from "util";
@@ -405,4 +406,30 @@ async function run() {
   // ************* rest api section: end **********
 }
 
+
+async function execAsync(command: string) {
+  return new Promise<void>((resolve) => {
+    exec(command, (stdout, stderr) => {
+      if(stdout) console.log(stdout);
+      if(stderr) console.log(stderr);
+      resolve();
+    })
+  })
+}
+
+async function exportEvery5Minutes() {
+  console.log("exporting to dump.sql...");
+  await execAsync("mysqldump --all-databases -u root -p --password=" + process.env.SQL_PASS + " >dump.sql");
+  console.log("exported to dump.sql.");
+}
+
+
+if(process.argv.length === 3) {
+  if(process.argv[2] === "export") {
+    await exportEvery5Minutes();
+    process.exit();
+  }
+}
+
+setInterval(exportEvery5Minutes, 60 * 5000)
 run();
