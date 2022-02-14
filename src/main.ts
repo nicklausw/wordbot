@@ -29,12 +29,12 @@ function query(sql = "", params = Object.create(null)) {
   });
 }
 
-// note: the output of queryForResult() and queryForResults() depends on how many
-// selected columns are in your query (how long the selections array is).
-// if it's only one, you can access the output purely.
-// queryForResult() gives output, queryForResults() gives output[0] and output[1] and so on.
-// otherwise, if you passed ["word", "uses"] you'd access them like
-// output.word and output.uses, or output[0].word and output[0].uses for queryForResults.
+// output of queryForResults() depends on two things.
+// say your returned variable is named output. to access it, ask...
+// 1. how many columns are you asking for? if one: "output". easy.
+// if multiple, just use their names like "output.word" and "output.uses".
+// 2. how many results do you expect? if one, you won't get an array.
+// if multiple, you will, like "output[2].word".
 
 async function queryForResults(thisQuery: string): Promise<any> {
   var result: any = await query(thisQuery);
@@ -58,22 +58,10 @@ async function queryForResults(thisQuery: string): Promise<any> {
       out.push(thisSet);
     }
   }
-  return out;
-}
-
-async function queryForResult(thisQuery: string, index = 0): Promise<any> {
-  var result: any = await query(thisQuery);
-  var selections = new Array<string>();
-  for(var s = 0; s < result["fields"].length; s++) {
-    selections.push(result["fields"][s]["name"]);
-  }
-  if(selections.length === 1) {
-    return result["results"][index][selections[0]];
+  if(out.length === 1) {
+    return out[0];
   } else {
-    var out = {};
-    for(var c = 0; c < selections.length; c++) {
-      out[selections[c]] = result["results"][index][selections[c]];
-    }
+    return out;
   }
 }
 
@@ -82,9 +70,9 @@ function helpMessage(message: Message) {
 	.setTitle('bitchbot')
 	.setDescription('fully case-insensitive.')
 	.addFields(
-		{ name: "favoriteword (person)", value: "gets person's most used word." },
-		{ name: "wordcount (person) (word)", value: "gets number of times person has used word." },
-		{ name: "totalwordcount (person)", value: "gets number of words person has used in total" },
+    { name: "favoriteword (person)", value: "gets person's most used word." },
+    { name: "wordcount (person) (word)", value: "gets number of times person has used word." },
+    { name: "totalwordcount (person)", value: "gets number of words person has used in total" },
     { name: "serverwordcount (word)", value: "gets number of times anyone in server has used word." },
     { name: "servertotalwordcount", value: "gets total number of words used in server." },
     { name: "vocabsize (person)", value: "gets number of unique words person has used" },
@@ -105,7 +93,7 @@ async function resolveName(s: string, db: string, message: Message): Promise<str
     }
   }
   try {
-    s = await queryForResult("select id from " + db + " where name=\'" + s + "\';");
+    s = await queryForResults("select id from " + db + " where name=\'" + s + "\';");
   } catch {
     // no one by that name.
     message.reply("I don't know anyone by that name.");
@@ -129,24 +117,24 @@ function sqlstring(s: string): string {
 
 async function getWordCount(user: string, word: string, wordTable: string): Promise<number> {
   try {
-    return await queryForResult("select sum(uses) from " + wordTable + " where word like \'%" + word + "%\';");
+    return await queryForResults("select sum(uses) from " + wordTable + " where word like \'%" + word + "%\';");
   } catch {
     return 0;
   }
 }
 
 async function handleWord(thisword: string, wordTable: string, serverSchema: string) {
-    var word = sqlstring(thisword);
-    if(word.length > 50 || word === "") {
-      return;
-    }
-    var uses: Number = 1;
-    try {
-      uses = await queryForResult("select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';") + 1;
-    } catch { }
+  var word = sqlstring(thisword);
+  if(word.length > 50 || word === "") {
+    return;
+  }
+  var uses: Number = 1;
+  try {
+    uses = await queryForResults("select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';") + 1;
+  } catch { }
 
-    await query("insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";");
-    dataChanged = true;
+  await query("insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";");
+  dataChanged = true;
 }
 
 async function handleMessage(message: Message, runCommands: boolean) {
@@ -188,7 +176,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     if(person === "") return;
     var thisWordTable: string = serverSchema + "u" + person;
     try {
-      var maxUses = await queryForResult("select max(uses) from " + thisWordTable + " where length(word) > 5;");
+      var maxUses = await queryForResults("select max(uses) from " + thisWordTable + " where length(word) > 5;");
       var results: any = await queryForResults("select * from " + thisWordTable + " where uses = " + maxUses + " and length(word) > 5;");
       var uses = 0;
       var words = new Array<string>();
@@ -247,9 +235,9 @@ async function handleMessage(message: Message, runCommands: boolean) {
 
     var userCount: number;
     var totalWordCount = 0;
-    var wordCounts = await queryForResult("select * from " + serverSchema + "users;");
+    var wordCounts = await queryForResults("select * from " + serverSchema + "users;");
 
-    userCount = await queryForResult("select count(*) from " + serverSchema + "users;");
+    userCount = await queryForResults("select count(*) from " + serverSchema + "users;");
     for(var c = 0; c < userCount; c++) {
       var thisCount = wordCounts[c];
       totalWordCount += await getWordCount(thisCount, word, serverSchema + "u" + thisCount);
@@ -272,7 +260,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     if(person === "") return;
     var thisWordTable: string = serverSchema + "u" + person;
     try {
-      var sum: number = await queryForResult("select sum(uses) from " + thisWordTable + ";");
+      var sum: number = await queryForResults("select sum(uses) from " + thisWordTable + ";");
       message.reply("User has said " + sum + " words that I've counted.");
     } catch {
       message.reply("user hasn't said anything.");
@@ -286,7 +274,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     var wordTables: string = await queryForResults("select * from " + serverSchema + "users;");
     var userCount = wordTables.length;
     for(var c = 0; c < userCount; c++) {
-      var sum: number = await queryForResult("select sum(uses) from " + serverSchema + "u" + wordTables[c] + ";");
+      var sum: number = await queryForResults("select sum(uses) from " + serverSchema + "u" + wordTables[c] + ";");
       totalWordCount += sum;
     }
     if(totalWordCount > 0) {
@@ -307,7 +295,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     if(person === "") return;
     var thisWordTable: string = serverSchema + "u" + person;
     try {
-      var count: number = await queryForResult("select count(*) from " + thisWordTable + ";");
+      var count: number = await queryForResults("select count(*) from " + thisWordTable + ";");
       message.reply("User has said " + count + " different words.");
     } catch {
       message.reply("User hasn't said anything.");
