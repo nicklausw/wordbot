@@ -186,7 +186,6 @@ async function handleMessage(message: Message, runCommands: boolean) {
       var uses = 0;
       var words = new Array<string>();
       for(var c = 0; c < results.length; c++) {
-        console.log("pushing the word " + results[c].word + " with " + results[c].uses + " uses.");
         words.push(results[c].word);
         uses = results[c].uses;
       }
@@ -241,10 +240,11 @@ async function handleMessage(message: Message, runCommands: boolean) {
 
     var userCount: number;
     var totalWordCount = 0;
+    var wordCounts = await queryForResult("select * from " + serverSchema + "users;", ["id"]);
 
     userCount = await queryForResult("select count(*) from " + serverSchema + "users;", ["count(*)"]);
     for(var c = 0; c < userCount; c++) {
-      var thisCount = await queryForResult("select * from " + serverSchema + "users;", ["id"], c);
+      var thisCount = wordCounts[c];
       totalWordCount += await getWordCount(thisCount, word, serverSchema + "u" + thisCount);
     }
     if(totalWordCount > 0) {
@@ -274,13 +274,12 @@ async function handleMessage(message: Message, runCommands: boolean) {
   }
 
   if(message.content.toLowerCase() == "servertotalwordcount" && runCommands) {
-    var userCount: number;
     var totalWordCount = 0;
 
-    userCount = await queryForResult("select count(*) from " + serverSchema + "users;", ["count(*)"]);
+    var wordTables: string = await queryForResults("select * from " + serverSchema + "users;", ["id"]);
+    var userCount = wordTables.length;
     for(var c = 0; c < userCount; c++) {
-      var thisWordTable: string = serverSchema + "u" + await queryForResult("select * from " + serverSchema + "users;", ["id"], c);
-      var sum: number = await queryForResult("select sum(uses) from " + thisWordTable + ";", ["sum(uses)"]);
+      var sum: number = await queryForResult("select sum(uses) from " + serverSchema + "u" + wordTables[c] + ";", ["sum(uses)"]);
       totalWordCount += sum;
     }
     if(totalWordCount > 0) {
