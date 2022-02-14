@@ -104,7 +104,7 @@ async function resolveName(s: string, db: string, message: Message): Promise<str
 
 // make a string SQL-friendly.
 function sqlstring(s: string): string {
-  s = v.trim(s, "\'").replace("\'", "\'\'").toLowerCase();
+  s = s.replace("\'", "\'\'").toLowerCase();
   const allowedSymbols = "abcdefghijklmnopqrstuvwxyz\'";
   var newstring = "";
   for(var c = 0; c < s.length; c++) {
@@ -112,6 +112,7 @@ function sqlstring(s: string): string {
       newstring += s[c];
     }
   }
+  newstring = v.trim(newstring, "\'");
   return newstring;
 }
 
