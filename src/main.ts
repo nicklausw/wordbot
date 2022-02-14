@@ -310,25 +310,20 @@ async function handleMessage(message: Message, runCommands: boolean) {
   }
 
   if(message.content.toLowerCase() === "servervocabsize" && runCommands) {
-    var userCount: number;
-
-    userCount = await queryForResult("select count(*) from " + serverSchema + "users;", ["count(*)"]);
-    var totalVocabSize = 0;
-    var uniqueWordList = new Array<string>();
     var userList = await queryForResults("select * from " + serverSchema + "users;", ["id"]);
+    var userCount = userList.length;
+    var joinString = "";
     for(var c = 0; c < userCount; c++) {
-      var thisWordTable = serverSchema + "u" + userList[c];
-      try {
-        var theseWords = await queryForResults("select word from " + thisWordTable + ";", ["word"]);
-        var listLength = await queryForResult("select count(*) from " + thisWordTable + ";", ["count(*)"]);
-        for(var d = 0; d < listLength; d++) {
-          if(uniqueWordList.includes(theseWords[d]) === false) {
-            uniqueWordList.push(theseWords[d]);
-            totalVocabSize++;
-          }
-        }
-      } catch (error) { if(!(error instanceof TypeError)) throw error; }
+      joinString += "select word from " + serverSchema + "u" + userList[c];
+      if(c !== userCount - 1) {
+        joinString += " union ";
+      } else {
+        joinString += ";";
+      }
     }
+
+    var uniqueWordList = await query(joinString);
+    var totalVocabSize = Object.keys(uniqueWordList["results"]).length;
 
     if(totalVocabSize > 0) {
       message.reply("Server has said " + totalVocabSize + " different words.");
