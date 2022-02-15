@@ -78,7 +78,7 @@ async function queryForResults(thisQuery: string): Promise<any> {
 
 function helpMessage(message: Message) {
   const helpEmbed = new MessageEmbed()
-  .setTitle('bitchbot')
+  .setTitle(client.user.username)
   .setDescription('fully case-insensitive.')
   .addFields(
     { name: "favoriteword (person)", value: "gets person's most used word." },
@@ -189,17 +189,20 @@ async function handleMessage(message: Message, runCommands: boolean) {
     var thisWordTable: string = serverSchema + "u" + person;
     try {
       var maxUses = await queryForResults("select max(uses) from " + thisWordTable + " where length(word) > 5;");
-      var results: any = await queryForResults("select * from " + thisWordTable + " where uses = " + maxUses + " and length(word) > 5;");
-      var uses = 0;
+      var results: any = await queryForResults("select word from " + thisWordTable + " where uses = " + maxUses + " and length(word) > 5;");
       var words = new Array<string>();
-      for(var c = 0; c < results.length; c++) {
-        words.push(results[c].word);
-        uses = results[c].uses;
+      if(Array.isArray(results)) {
+        console.log(results);
+        for(var c = 0; c < results.length; c++) {
+          words.push(results[c]);
+        }
+      } else {
+        words.push(results);
       }
       if(words.length === 0) {
         message.reply("No words found. Lurk less.");
       } else if(words.length === 1) {
-        message.reply("Favorite word is " + words[0] + " with " + uses + " use" + (uses > 1 ? "s" : "") + ".");
+        message.reply("Favorite word is " + words[0] + " with " + maxUses + " use" + (maxUses > 1 ? "s" : "") + ".");
       } else {
         var response: string = "Favorite words are ";
         for(var c = 0; c < words.length; c++) {
@@ -207,7 +210,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
           if(c === words.length - 2) response += " and "
           else if(c !== words.length - 1) response += ", "
         }
-        response += " with " + uses + " uses.";
+        response += " with " + maxUses + " use" + (maxUses > 1 ? "s" : "") + ".";
         message.reply(response);
       }
     } catch (error) {
