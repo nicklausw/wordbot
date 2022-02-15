@@ -43,7 +43,7 @@ function query(sql = "", params = Object.create(null)) {
 // output of queryForResults() depends on how many columns you ask for.
 // if multiple, just use their names like "output[0].word" and "output[0].uses".
 // if one, just output[0] and output[1].
-// if you only need one response, use queryForResult().
+// if you only need one response, use queryForNumber() or queryForString().
 
 async function queryForResults(thisQuery: string): Promise<Array<any>> {
   var result: any = await query(thisQuery);
@@ -70,7 +70,12 @@ async function queryForResults(thisQuery: string): Promise<Array<any>> {
   return out;
 }
 
-async function queryForResult(thisQuery: string): Promise<any> {
+async function queryForNumber(thisQuery: string): Promise<number> {
+  var out = await queryForResults(thisQuery);
+  if(out[0]) return out[0]; else return 0;
+}
+
+async function queryForString(thisQuery: string): Promise<string> {
   var out = await queryForResults(thisQuery);
   if(out[0]) return out[0]; else return "";
 }
@@ -103,7 +108,7 @@ async function resolveName(s: string, db: string, message: Message): Promise<str
     }
   }
   try {
-    s = await queryForResult("select id from " + db + " where name=\'" + s + "\';");
+    s = await queryForString("select id from " + db + " where name=\'" + s + "\';");
   } catch {
     // no one by that name.
     return "";
@@ -132,7 +137,7 @@ async function handleWord(thisword: string, wordTable: string, serverSchema: str
   }
   var uses: number = 1;
   try {
-    uses = await queryForResult("select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';") + 1;
+    uses = await queryForNumber("select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';") + 1;
   } catch { }
 
   await query("insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";");
@@ -176,7 +181,7 @@ async function getFavoriteWords(server: string, person: string): Promise<Array<F
   var thisWordTable: string = serverSchema + "u" + person;
   var words = new Array<FavoriteWord>();
   try {
-    var maxUses = await queryForResult("select max(uses) from " + thisWordTable + " where length(word) > 5;");
+    var maxUses = await queryForNumber("select max(uses) from " + thisWordTable + " where length(word) > 5;");
     var results: any = await queryForResults("select word from " + thisWordTable + " where uses = " + maxUses + " and length(word) > 5;");
     if(results.length > 1) {
       for(var c = 0; c < results.length; c++) {
@@ -193,7 +198,7 @@ async function getFavoriteWords(server: string, person: string): Promise<Array<F
 
 async function getWordCount(word: string, wordTable: string): Promise<number> {
   try {
-    return await queryForResult("select sum(uses) from " + wordTable + " where word like \'%" + word + "%\';");
+    return await queryForNumber("select sum(uses) from " + wordTable + " where word like \'%" + word + "%\';");
   } catch {
     return 0;
   }
@@ -205,7 +210,7 @@ async function getServerWordCount(server: string, word: string): Promise<number>
   var serverWordCount = 0;
   var wordCounts = await queryForResults("select * from " + serverSchema + "users;");
 
-  userCount = await queryForResult("select count(*) from " + serverSchema + "users;");
+  userCount = await queryForNumber("select count(*) from " + serverSchema + "users;");
   for(var c = 0; c < userCount; c++) {
     var thisCount = wordCounts[c];
     serverWordCount += await getWordCount(word, serverSchema + "u" + thisCount);
@@ -215,7 +220,7 @@ async function getServerWordCount(server: string, word: string): Promise<number>
 
 async function getTotalWordCount(server: string, person: string): Promise<number> {
   try {
-    return await queryForResult("select sum(uses) from s" + server + ".u" + person + ";");
+    return await queryForNumber("select sum(uses) from s" + server + ".u" + person + ";");
   } catch {
     return 0;
   }
@@ -228,7 +233,7 @@ async function getServerTotalWordCount(server: string): Promise<number> {
   var wordTables = await queryForResults("select * from " + serverSchema + "users;");
   var userCount = wordTables.length;
   for(var c = 0; c < userCount; c++) {
-    var sum: number = await queryForResult("select sum(uses) from " + serverSchema + "u" + wordTables[c] + ";");
+    var sum: number = await queryForNumber("select sum(uses) from " + serverSchema + "u" + wordTables[c] + ";");
     serverTotalWordCount += sum;
   }
   return serverTotalWordCount;
@@ -238,7 +243,7 @@ async function getVocabSize(server: string, person: string): Promise<number> {
   var serverSchema: string = "s" + server + ".";
   var thisWordTable: string = serverSchema + "u" + person;
   try {
-    return await queryForResult("select count(*) from " + thisWordTable + ";");
+    return await queryForNumber("select count(*) from " + thisWordTable + ";");
   } catch {
     return 0;
   }
@@ -291,15 +296,9 @@ async function funFacts(message: Message) {
 
   // point out nicknames that aren't username
   var freshNames = new Array<string>();
-  if(nicknames.length > 1) {
-    for(var c = 0; c < nicknames.length; c++) {
-      if(nicknames[c] != message.author.username.toLowerCase()) {
-        freshNames.push(nicknames[c]);
-      }
-    }
-  } else {
-    if (nicknames[0] != "" && nicknames[0] != message.author.username.toLowerCase()) {
-      freshNames.push(nicknames[0]);
+  for(var c = 0; c < nicknames.length; c++) {
+    if(nicknames[c] !== "" && nicknames[c] != message.author.username.toLowerCase()) {
+      freshNames.push(nicknames[c]);
     }
   }
   if(freshNames.length > 0) {
