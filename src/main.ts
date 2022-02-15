@@ -10,7 +10,7 @@ import v from "voca";
 var dataChanged = false;
 
 var con = MySQL.createConnection({
-  host: "localhost",
+  host: "127.0.0.1",
   user: "root",
   password: process.env.SQL_PASS
 });
@@ -20,12 +20,12 @@ function closeConnection() {
   console.log("closed sql connection.");
   process.exit();
 }
-
+/*
 process.on("SIGINT", closeConnection); // ctrl+c
 process.on("SIGUSR1", closeConnection); // nodemon restart
 process.on("SIGUSR2", closeConnection); // also nodemon restart
 process.on("uncaughtException", closeConnection);
-
+*/
 // promise to get the query output.
 function query(sql = "", params = Object.create(null)) {
   return new Promise((resolve, reject) => {
@@ -78,7 +78,7 @@ async function queryForResults(thisQuery: string): Promise<any> {
 
 function helpMessage(message: Message) {
   const helpEmbed = new MessageEmbed()
-  .setTitle(client.user.username)
+  .setTitle(client.user!.username)
   .setDescription('fully case-insensitive.')
   .addFields(
     { name: "favoriteword (person)", value: "gets person's most used word." },
@@ -107,7 +107,6 @@ async function resolveName(s: string, db: string, message: Message): Promise<str
     s = await queryForResults("select id from " + db + " where name=\'" + s + "\';");
   } catch {
     // no one by that name.
-    message.reply("I don't know anyone by that name.");
     return "";
   }
   return s;
@@ -125,14 +124,6 @@ function sqlstring(s: string): string {
   }
   newstring = v.trim(newstring, "\'");
   return newstring;
-}
-
-async function getWordCount(user: string, word: string, wordTable: string): Promise<number> {
-  try {
-    return await queryForResults("select sum(uses) from " + wordTable + " where word like \'%" + word + "%\';");
-  } catch {
-    return 0;
-  }
 }
 
 async function handleWord(thisword: string, wordTable: string, serverSchema: string) {
@@ -172,153 +163,91 @@ async function indexChannels(message: Message) {
   return;
 }
 
-async function favoriteWord(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
-  if(parameters.length != 2) {
-    helpMessage(message);
-    return;
+class FavoriteWord {
+  word: string;
+  uses: number;
+  constructor(word: string, uses: number) {
+    this.word = word;
+    this.uses = uses;
   }
-  var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
-  if(person === "") return;
+}
+
+async function getFavoriteWords(server: string, person: string): Promise<Array<FavoriteWord>> {
+  var serverSchema: string = "s" + server + ".";
   var thisWordTable: string = serverSchema + "u" + person;
+  var words = new Array<FavoriteWord>();
   try {
     var maxUses = await queryForResults("select max(uses) from " + thisWordTable + " where length(word) > 5;");
     var results: any = await queryForResults("select word from " + thisWordTable + " where uses = " + maxUses + " and length(word) > 5;");
-    var words = new Array<string>();
     if(Array.isArray(results)) {
       console.log(results);
       for(var c = 0; c < results.length; c++) {
-        words.push(results[c]);
+        words.push(new FavoriteWord(results[c], maxUses));
       }
     } else {
-      words.push(results);
-    }
-    if(words.length === 0) {
-      message.reply("No words found. Lurk less.");
-    } else if(words.length === 1) {
-      message.reply("Favorite word is " + words[0] + " with " + maxUses + " use" + (maxUses > 1 ? "s" : "") + ".");
-    } else {
-      var response: string = "Favorite words are ";
-      for(var c = 0; c < words.length; c++) {
-        response += words[c];
-        if(c === words.length - 2) response += " and ";
-        else if(c !== words.length - 1) response += ", ";
-      }
-      response += " with " + maxUses + " use" + (maxUses > 1 ? "s" : "") + ".";
-      message.reply(response);
+      words.push(new FavoriteWord(results, maxUses));
     }
   } catch (error) {
     throw error;
-    message.reply("came up empty on that one.");
-    return;
   }
-  return;
+  return words;
 }
 
-async function wordCount(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
-  var parameters: Array<string> = message.content.toLowerCase().split(" ");
-  if(parameters.length != 3) {
-    helpMessage(message);
-    return;
+async function getWordCount(word: string, wordTable: string): Promise<number> {
+  try {
+    return await queryForResults("select sum(uses) from " + wordTable + " where word like \'%" + word + "%\';");
+  } catch {
+    return 0;
   }
-  var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
-  if(person === "") return;
-  var word: string = parameters[2].replace("\'", "\'\'");
-  var thisWordTable: string = serverSchema + "u" + person;
-  var count = await getWordCount(person, word, thisWordTable);
-  if(count > 0) {
-    message.reply("User has said \"" + word + "\" " + count + " time" + (count > 1 ? "s" : "") + ".");
-  } else {
-    message.reply("came up empty on that one.");
-  }
-  return;
 }
 
-async function serverWordCount(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
-  var parameters: Array<string> = message.content.toLowerCase().split(" ");
-  if(parameters.length != 2) {
-    helpMessage(message);
-    return;
-  }
-  var word: string = parameters[1].replace("\'", "\'\'");
-
+async function getServerWordCount(server: string, word: string): Promise<number> {
+  var serverSchema: string = "s" + server + ".";
   var userCount: number;
-  var totalWordCount = 0;
+  var serverWordCount = 0;
   var wordCounts = await queryForResults("select * from " + serverSchema + "users;");
 
   userCount = await queryForResults("select count(*) from " + serverSchema + "users;");
   for(var c = 0; c < userCount; c++) {
     var thisCount = wordCounts[c];
-    totalWordCount += await getWordCount(thisCount, word, serverSchema + "u" + thisCount);
+    serverWordCount += await getWordCount(word, serverSchema + "u" + thisCount);
   }
-  if(totalWordCount > 0) {
-    message.reply("Server has said " + word + " " + totalWordCount + " times.");
-  } else {
-    message.reply("Server hasn't said that word.");
-  }
-  return;
+  return serverWordCount;
 }
 
-async function totalWordCount(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
-  var parameters: Array<string> = message.content.toLowerCase().split(" ");
-  if(parameters.length != 2) {
-    helpMessage(message);
-    return;
-  }
-  var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
-  if(person === "") return;
-  var thisWordTable: string = serverSchema + "u" + person;
+async function getTotalWordCount(server: string, person: string): Promise<number> {
   try {
-    var sum: number = await queryForResults("select sum(uses) from " + thisWordTable + ";");
-    message.reply("User has said " + sum + " words that I've counted.");
+    return await queryForResults("select sum(uses) from s" + server + ".u" + person + ";");
   } catch {
-    message.reply("user hasn't said anything.");
+    return 0;
   }
-  return;
 }
 
-async function serverTotalWordCount(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
-  var totalWordCount = 0;
+async function getServerTotalWordCount(server: string): Promise<number> {
+  var serverSchema: string = "s" + server + ".";
+  var serverTotalWordCount = 0;
 
   var wordTables: string = await queryForResults("select * from " + serverSchema + "users;");
   var userCount = wordTables.length;
   for(var c = 0; c < userCount; c++) {
     var sum: number = await queryForResults("select sum(uses) from " + serverSchema + "u" + wordTables[c] + ";");
-    totalWordCount += sum;
+    serverTotalWordCount += sum;
   }
-  if(totalWordCount > 0) {
-    message.reply("Server has said " + totalWordCount + " total words.");
-  } else {
-    message.reply("Server hasn't said that word.");
-  }
-  return;
+  return serverTotalWordCount;
 }
 
-async function vocabSize(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
-  var parameters: Array<string> = message.content.toLowerCase().split(" ");
-  if(parameters.length != 2) {
-    helpMessage(message);
-    return;
-  }
-  var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
-  if(person === "") return;
+async function getVocabSize(server: string, person: string): Promise<number> {
+  var serverSchema: string = "s" + server + ".";
   var thisWordTable: string = serverSchema + "u" + person;
   try {
-    var count: number = await queryForResults("select count(*) from " + thisWordTable + ";");
-    message.reply("User has said " + count + " different words.");
+    return await queryForResults("select count(*) from " + thisWordTable + ";");
   } catch {
-    message.reply("User hasn't said anything.");
+    return 0;
   }
-  return;
 }
 
-async function serverVocabSize(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
+async function getServerVocabSize(server: string): Promise<number> {
+  var serverSchema: string = "s" + server + ".";
   var userList = await queryForResults("select * from " + serverSchema + "users;");
   var userCount = userList.length;
   var joinString = "";
@@ -331,42 +260,13 @@ async function serverVocabSize(message: Message) {
     }
   }
 
-  var uniqueWordList = await query(joinString);
-  var totalVocabSize = Object.keys(uniqueWordList["results"]).length;
-
-  if(totalVocabSize > 0) {
-    message.reply("Server has said " + totalVocabSize + " different words.");
-  } else {
-    message.reply("Server hasn't said anything.");
-  }
-  return;
+  var uniqueWordList: any = await query(joinString);
+  return Object.keys(uniqueWordList["results"]).length;
 }
 
-async function addName(message: Message) {
-  var serverSchema: string = "s" + message.guild!.id + ".";
-  var parameters: Array<string> = message.content.toLowerCase().split(" ");
-  if(parameters.length != 3) {
-    helpMessage(message);
-    return;
-  }
-  var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
-  if(person === "") return;
-  var nickname: string = parameters[2].replace("\'", "\'\'");
-  var thisNameTable: string = serverSchema + "nicknames";
-
-  if(nickname.toLowerCase() !== sqlstring(nickname)) {
-    message.reply("nicknames can only have letters and apostrophes.");
-    return;
-  }
-  nickname = sqlstring(nickname);
-
-  if(nickname.length > 50) {
-    message.reply("nicknames can't be longer than 50 characters.");
-    return;
-  }
-
+async function addName(server: string, person: string, name: string) {
   try {
-    await query("insert into " + thisNameTable + " (name, id) values (" + "\'" + nickname + "\', " + person + ") on duplicate key update id = " + person + ";");
+    await query("insert into s" + server + ".nicknames (name, id) values (" + "\'" + name + "\', " + person + ") on duplicate key update id = " + person + ";");
     dataChanged = true;
   } catch (error) {
     throw error;
@@ -375,7 +275,6 @@ async function addName(message: Message) {
 }
 
 async function handleMessage(message: Message, runCommands: boolean) {
-  var wordArray: Array<string>;
   var serverSchema: string = "s" + message.guild!.id + ".";
   var parameters: Array<string> = message.content.toLowerCase().split(" ");
 
@@ -387,42 +286,142 @@ async function handleMessage(message: Message, runCommands: boolean) {
   }
 
   if(message.content.toLowerCase().startsWith("favoriteword") && runCommands) {
-    await favoriteWord(message);
+    if(parameters.length !== 2) {
+      helpMessage(message);
+      return;
+    }
+    var person = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person == "") {
+      await message.reply("I don't know anyone by that name.");
+      return;
+    }
+    var favoriteWords = await getFavoriteWords(message.guild!.id, person);
+    var maxUses = favoriteWords[0].uses;
+    if(favoriteWords.length === 0) {
+      message.reply("No words registered. Lurk less.");
+    } else if(favoriteWords.length === 1) {
+      message.reply("Favorite word is \"" + favoriteWords[0].word + "\" with " + maxUses + " uses.");
+    } else {
+      var response: string = "Favorite words are ";
+      for(var c = 0; c < favoriteWords.length; c++) {
+        response += "\"" + favoriteWords[c].word + "\"";
+        if(c === favoriteWords.length - 2) response += " and ";
+        else if(c !== favoriteWords.length - 1) response += ", ";
+      }
+      response += " with " + maxUses + " use" + (maxUses > 1 ? "s" : "") + ".";
+      message.reply(response);
+    }
     return;
   }
 
   if(message.content.toLowerCase().startsWith("wordcount") && runCommands) {
-    await wordCount(message);
+    if(parameters.length != 3) {
+      helpMessage(message);
+      return;
+    }
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
+    var word: string = parameters[2].replace("\'", "\'\'");
+    var thisWordTable: string = serverSchema + "u" + person;
+    var count = await getWordCount(word, thisWordTable);
+    if(count > 0) {
+      message.reply("User has said \"" + word + "\" " + count + " time" + (count > 1 ? "s" : "") + ".");
+    } else {
+      message.reply("came up empty on that one.");
+    }
     return;
   }
 
   if(message.content.toLowerCase().startsWith("serverwordcount") && runCommands) {
-    await serverWordCount(message);
+    if(parameters.length != 2) {
+      helpMessage(message);
+      return;
+    }
+    var word: string = parameters[1].replace("\'", "\'\'");
+    var serverWordCount = await getServerWordCount(message.guild!.id, word);
+    if(serverWordCount > 0) {
+      message.reply("Server has said " + word + " " + serverWordCount + " times.");
+    } else {
+      message.reply("Server hasn't said that word.");
+    }
     return;
   }
 
   if(message.content.toLowerCase().startsWith("totalwordcount") && runCommands) {
-    await totalWordCount(message);
+    if(parameters.length != 2) {
+      helpMessage(message);
+      return;
+    }
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
+    var thisWordTable: string = serverSchema + "u" + person;
+    var totalWordCount = await getTotalWordCount(message.guild!.id, person);
+    if(totalWordCount > 0) {
+      message.reply("User has said " + totalWordCount + " words that I've counted.");
+    } else {
+      message.reply("user hasn't said anything.");
+    }
     return;
   }
 
   if(message.content.toLowerCase() == "servertotalwordcount" && runCommands) {
-    await serverTotalWordCount(message);
+    var serverTotalWordCount = await getServerTotalWordCount(message.guild!.id);
+    if(serverTotalWordCount > 0) {
+      message.reply("Server has said " + serverTotalWordCount + " total words.");
+    } else {
+      message.reply("Server hasn't said anything.");
+    }
     return;
   }
 
   if(message.content.toLowerCase().startsWith("vocabsize") && runCommands) {
-    await vocabSize(message);
+    if(parameters.length != 2) {
+      helpMessage(message);
+      return;
+    }
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
+    var vocabSize = await getVocabSize(message.guild!.id, person);
+    if(vocabSize > 0) {
+      message.reply("User has said " + vocabSize + " different words.");
+    } else {
+      message.reply("User hasn't said anything.");
+    }
     return;
   }
 
   if(message.content.toLowerCase() === "servervocabsize" && runCommands) {
-    await serverVocabSize(message);
+    var serverVocabSize = await getServerVocabSize(message.guild!.id);
+    if(serverVocabSize > 0) {
+      message.reply("Server has said " + serverVocabSize + " different words.");
+    } else {
+      message.reply("Server hasn't said anything.");
+    }
     return;
   }
 
   if(message.content.toLowerCase().startsWith("addname") && runCommands) {
-    await addName(message);
+    if(parameters.length != 3) {
+      helpMessage(message);
+      return;
+    }
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
+    var nickname: string = parameters[2].replace("\'", "\'\'");
+    var thisNameTable: string = serverSchema + "nicknames";
+
+    if(nickname.toLowerCase() !== sqlstring(nickname)) {
+      message.reply("nicknames can only have letters and apostrophes.");
+      return;
+    }
+    nickname = sqlstring(nickname);
+
+    if(nickname.length > 50) {
+      message.reply("nicknames can't be longer than 50 characters.");
+      return;
+    }
+
+    await addName(message.guild!.id, person, nickname);
     return;
   }
 
