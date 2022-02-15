@@ -136,12 +136,7 @@ async function handleWord(thisword: string, wordTable: string, serverSchema: str
   if(word.length > 50 || word === "") {
     return;
   }
-  var uses: number = 1;
-  try {
-    uses = await queryForNumber("select uses from " + serverSchema + wordTable + " where word=\'" + word + "\';") + 1;
-  } catch { }
-
-  await query("insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', " + uses + ") on duplicate key update uses = " + uses + ";");
+  await query("insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', 1) on duplicate key update uses = uses + 1;");
   dataChanged = true;
 }
 
@@ -392,8 +387,6 @@ async function handleMessage(message: Message, runCommands: boolean) {
   var serverSchema: string = "s" + message.guild!.id + ".";
   var parameters: Array<string> = message.content.toLowerCase().split(" ");
 
-  if(runCommands) console.log("processing message from " + message.author.id + "...");
-
   if(message.content.toLowerCase().startsWith("indexchannels") && runCommands) {
     await indexChannels(message);
     return;
@@ -558,7 +551,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
 
   // make tables for user
   await query("insert into " + serverSchema + "users (id) select \'" + message.author.id + "\' from dual where not exists (select id from " + serverSchema + "users where id=\'" + message.author.id + "\');");
-  await query("create table if not exists " + serverSchema + wordTable + "(word varchar(50), uses bigint, primary key(word));");
+  await query("create table if not exists " + serverSchema + wordTable + " (word varchar(50), uses bigint, primary key(word));");
 
   var words: Array<string> = message.content.trim().replace("\n", " ").split(" ");
   do {
@@ -570,6 +563,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
 }
 
 async function newMessage(message: Message, runCommands: boolean) {
+  if(runCommands) console.log("processing message from " + message.author.id + "...");
   await query("create schema if not exists s" + message.guild!.id + ";");
   await query("create table if not exists s" + message.guild!.id + ".users(id varchar(50));");
   await query("create table if not exists s" + message.guild!.id + ".nicknames(name varchar(50), id varchar(50), primary key(name));");
