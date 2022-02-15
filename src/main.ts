@@ -274,6 +274,69 @@ async function addName(server: string, person: string, name: string) {
   return;
 }
 
+async function getNicknames(server: string, id: string): Promise<Array<string>> {
+  try {
+    return await queryForResults("select name from s" + server + ".nicknames where id = '" + id + "';");
+  } catch {
+    return new Array<string>();
+  }
+}
+
+async function funFacts(message: Message) {
+  var replyMessage = "Hello, " + message.author.username + "! ";
+  var nicknames = await getNicknames(message.guild!.id, message.author.id);
+  var favoriteWords = await getFavoriteWords(message.guild!.id, message.author.id);
+  var totalWordCount = await getTotalWordCount(message.guild!.id, message.author.id);
+  var vocabSize = await getVocabSize(message.guild!.id, message.author.id);
+  var serverTotalWordCount = await getServerTotalWordCount(message.guild!.id);
+  var serverVocabSize = await getServerVocabSize(message.guild!.id);
+
+  // point out nicknames that aren't username
+  var freshNames = new Array<string>();
+  for(var c = 0; c < nicknames.length; c++) {
+    if(nicknames[c] !== message.author.username.toLowerCase()) {
+      freshNames.push(nicknames[c]);
+    }
+  }
+  if(freshNames.length > 0) {
+    replyMessage += "I also know you as ";
+    for(var c = 0; c < freshNames.length; c++) {
+      replyMessage += freshNames[c];
+      if(c === freshNames.length - 1) {
+        replyMessage += ".\n";
+      } else if(c !== freshNames.length - 2) {
+        replyMessage += ", ";
+      } else {
+        replyMessage += " and ";
+      }
+    }
+  }
+  if(favoriteWords.length === 0) {
+    replyMessage += "I haven't registered any messages from you. What's up with that? You type such beautiful words.\n";
+  } else if(favoriteWords.length === 1) {
+    replyMessage += "You must like the word \"" + favoriteWords[0].word + "\" a lot. You've used it more than any other, " + favoriteWords[0].uses + " time" + (favoriteWords[0].uses !== 1 ? "s" : "") + "!\n";
+  } else {
+    replyMessage += "You must like the words ";
+    for(var c = 0; c < favoriteWords.length; c++) {
+      replyMessage += "\"" + freshNames[c] + "\"";
+      if(c === freshNames.length - 1) {
+        replyMessage += ". You've used them more than any other, " + favoriteWords[0].uses + " time" + (favoriteWords[0].uses !== 1 ? "s" : "") + " each!\n";
+      } else if(c !== freshNames.length - 2) {
+        replyMessage += ", ";
+      } else {
+        replyMessage += " and ";
+      }
+    }
+  }
+  replyMessage += "From what I've counted in this server, your total word count is " + totalWordCount + " word" + (totalWordCount !== 1 ? "s" : "") + ". ";
+  replyMessage += vocabSize + " of them are unique.\n";
+  replyMessage += "Your words make up " + Math.round((totalWordCount / serverTotalWordCount) * 100) + "% of those on this server.\n";
+  replyMessage += "You've also used " + Math.round((totalWordCount / serverTotalWordCount) * 100) + "% of the unique words on this server.\n";
+  replyMessage += "Your lucky number today is " + Math.round(Math.random() * 10) + ". Cherish that.\nHave a nice day/night/whatever!";
+  message.reply(replyMessage);
+}
+
+
 async function handleMessage(message: Message, runCommands: boolean) {
   var serverSchema: string = "s" + message.guild!.id + ".";
   var parameters: Array<string> = message.content.toLowerCase().split(" ");
@@ -308,7 +371,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
         if(c === favoriteWords.length - 2) response += " and ";
         else if(c !== favoriteWords.length - 1) response += ", ";
       }
-      response += " with " + maxUses + " use" + (maxUses > 1 ? "s" : "") + ".";
+      response += " with " + maxUses + " use" + (maxUses !== 1 ? "s" : "") + ".";
       message.reply(response);
     }
     return;
@@ -325,7 +388,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     var thisWordTable: string = serverSchema + "u" + person;
     var count = await getWordCount(word, thisWordTable);
     if(count > 0) {
-      message.reply("User has said \"" + word + "\" " + count + " time" + (count > 1 ? "s" : "") + ".");
+      message.reply("User has said \"" + word + "\" " + count + " time" + (count !== 1 ? "s" : "") + ".");
     } else {
       message.reply("came up empty on that one.");
     }
@@ -422,6 +485,11 @@ async function handleMessage(message: Message, runCommands: boolean) {
     }
 
     await addName(message.guild!.id, person, nickname);
+    return;
+  }
+
+  if(message.content.toLowerCase() === "funfacts") {
+    await funFacts(message);
     return;
   }
 
