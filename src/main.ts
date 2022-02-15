@@ -339,7 +339,7 @@ async function funFacts(message: Message) {
   replyMessage += "From what I've counted in this server, your total word count is " + totalWordCount + " word" + (totalWordCount !== 1 ? "s" : "") + ". ";
   replyMessage += vocabSize + " of them are unique.\n";
   replyMessage += "Your words make up " + Math.round((totalWordCount / serverTotalWordCount) * 100) + "% of those on this server (that have been counted, of course.)\n";
-  replyMessage += "You've also used " + Math.round((totalVocabSize / serverTotalVocabSize) * 100) + "% of the unique words on this server.\n";
+  replyMessage += "You've also used " + Math.round((vocabSize / serverVocabSize) * 100) + "% of the unique words on this server.\n";
   replyMessage += "Your lucky number today is " + Math.round(Math.random() * 10) + ". Cherish that.\nHave a nice day/night/whatever!";
   message.reply(replyMessage);
 }
