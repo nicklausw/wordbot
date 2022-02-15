@@ -85,6 +85,7 @@ function helpMessage(message: Message) {
   .setTitle(client.user!.username)
   .setDescription('fully case-insensitive.')
   .addFields(
+    { name: "funfacts", value: "gives you facts about your words and such." },
     { name: "favoriteword (person)", value: "gets person's most used word." },
     { name: "wordcount (person) (word)", value: "gets number of times person has used word." },
     { name: "totalwordcount (person)", value: "gets number of words person has used in total" },
@@ -342,6 +343,45 @@ async function funFacts(message: Message) {
   message.reply(replyMessage);
 }
 
+async function allServers(message: Message) {
+  var allNames = await queryForResults("select schema_name from information_schema.schemata;");
+  var names = new Array<string>();
+  for(var c = 0; c < allNames.length; c++) {
+    if(allNames[c][0] === 's' && isNaN(allNames[c].substring(1)) === false) {
+      names.push(allNames[c].substring(1));
+    }
+  }
+  
+  // get overall vocab size
+  var tableList = new Array<string>();
+  for(var c = 0; c < names.length; c++) {
+    var results = await queryForResults("select * from s" + names[c] + ".users;");
+    for(var d = 0; d < results.length; d++) {
+      tableList.push("s" + names[c] + ".u" + results[d]);
+    }
+  }
+  var joinString = "";
+  for(var c = 0; c < tableList.length; c++) {
+    joinString += "select word from " + tableList[c];
+    if(c !== tableList.length - 1) {
+      joinString += " union ";
+    } else {
+      joinString += ";";
+    }
+  }
+
+  var uniqueWordList: any = await query(joinString);
+  var vocabSize = Object.keys(uniqueWordList["results"]).length;
+  
+  var wordCount = 0;
+  for(var c = 0; c < names.length; c++) {
+    var thisCount = await getServerTotalWordCount(names[c]);
+    wordCount += thisCount;
+  }
+  
+  message.reply("Over all servers there are " + wordCount + " words and " + vocabSize + " unique words.");
+  return;
+}
 
 async function handleMessage(message: Message, runCommands: boolean) {
   var serverSchema: string = "s" + message.guild!.id + ".";
@@ -496,6 +536,11 @@ async function handleMessage(message: Message, runCommands: boolean) {
 
   if(message.content.toLowerCase().startsWith("funfacts")) {
     await funFacts(message);
+    return;
+  }
+  
+  if(message.content.toLowerCase() === "allservers") {
+    await allServers(message);
     return;
   }
 
