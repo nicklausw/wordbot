@@ -180,7 +180,6 @@ async function getFavoriteWords(server: string, person: string): Promise<Array<F
     var maxUses = await queryForResults("select max(uses) from " + thisWordTable + " where length(word) > 5;");
     var results: any = await queryForResults("select word from " + thisWordTable + " where uses = " + maxUses + " and length(word) > 5;");
     if(Array.isArray(results)) {
-      console.log(results);
       for(var c = 0; c < results.length; c++) {
         words.push(new FavoriteWord(results[c], maxUses));
       }
@@ -293,13 +292,20 @@ async function funFacts(message: Message) {
 
   // point out nicknames that aren't username
   var freshNames = new Array<string>();
-  for(var c = 0; c < nicknames.length; c++) {
-    if(nicknames[c] !== message.author.username.toLowerCase()) {
-      freshNames.push(nicknames[c]);
+  if(Array.isArray(nicknames)) {
+    for(var c = 0; c < nicknames.length; c++) {
+      if(nicknames[c] != message.author.username.toLowerCase()) {
+        freshNames.push(nicknames[c]);
+      }
+    }
+  } else {
+    if (nicknames != "" && nicknames != message.author.username.toLowerCase()) {
+      freshNames.push(nicknames);
     }
   }
   if(freshNames.length > 0) {
     replyMessage += "I also know you as ";
+    if(freshNames.length === 1) replyMessage += freshNames + ".\n"; else
     for(var c = 0; c < freshNames.length; c++) {
       replyMessage += freshNames[c];
       if(c === freshNames.length - 1) {
@@ -310,6 +316,8 @@ async function funFacts(message: Message) {
         replyMessage += " and ";
       }
     }
+  } else {
+    replyMessage += "\n";
   }
   if(favoriteWords.length === 0) {
     replyMessage += "I haven't registered any messages from you. What's up with that? You type such beautiful words.\n";
@@ -318,10 +326,10 @@ async function funFacts(message: Message) {
   } else {
     replyMessage += "You must like the words ";
     for(var c = 0; c < favoriteWords.length; c++) {
-      replyMessage += "\"" + freshNames[c] + "\"";
-      if(c === freshNames.length - 1) {
+      replyMessage += "\"" + favoriteWords[c].word + "\"";
+      if(c === favoriteWords.length - 1) {
         replyMessage += ". You've used them more than any other, " + favoriteWords[0].uses + " time" + (favoriteWords[0].uses !== 1 ? "s" : "") + " each!\n";
-      } else if(c !== freshNames.length - 2) {
+      } else if(c !== favoriteWords.length - 2) {
         replyMessage += ", ";
       } else {
         replyMessage += " and ";
@@ -330,7 +338,7 @@ async function funFacts(message: Message) {
   }
   replyMessage += "From what I've counted in this server, your total word count is " + totalWordCount + " word" + (totalWordCount !== 1 ? "s" : "") + ". ";
   replyMessage += vocabSize + " of them are unique.\n";
-  replyMessage += "Your words make up " + Math.round((totalWordCount / serverTotalWordCount) * 100) + "% of those on this server.\n";
+  replyMessage += "Your words make up " + Math.round((totalWordCount / serverTotalWordCount) * 100) + "% of those on this server (that have been counted, of course.)\n";
   replyMessage += "You've also used " + Math.round((totalWordCount / serverTotalWordCount) * 100) + "% of the unique words on this server.\n";
   replyMessage += "Your lucky number today is " + Math.round(Math.random() * 10) + ". Cherish that.\nHave a nice day/night/whatever!";
   message.reply(replyMessage);
@@ -488,7 +496,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase() === "funfacts") {
+  if(message.content.toLowerCase().startsWith("funfacts")) {
     await funFacts(message);
     return;
   }
