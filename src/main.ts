@@ -10,10 +10,21 @@ import v from "voca";
 var dataChanged = false;
 
 var con = MySQL.createConnection({
-  host: "127.0.0.1",
+  host: "localhost",
   user: "root",
   password: process.env.SQL_PASS
 });
+
+function closeConnection() {
+  con.end();
+  console.log("closed sql connection.");
+  process.exit();
+}
+
+process.on("SIGINT", closeConnection); // ctrl+c
+process.on("SIGUSR1", closeConnection); // nodemon restart
+process.on("SIGUSR2", closeConnection); // also nodemon restart
+process.on("uncaughtException", closeConnection);
 
 // promise to get the query output.
 function query(sql = "", params = Object.create(null)) {
@@ -67,9 +78,9 @@ async function queryForResults(thisQuery: string): Promise<any> {
 
 function helpMessage(message: Message) {
   const helpEmbed = new MessageEmbed()
-	.setTitle('bitchbot')
-	.setDescription('fully case-insensitive.')
-	.addFields(
+  .setTitle('bitchbot')
+  .setDescription('fully case-insensitive.')
+  .addFields(
     { name: "favoriteword (person)", value: "gets person's most used word." },
     { name: "wordcount (person) (word)", value: "gets number of times person has used word." },
     { name: "totalwordcount (person)", value: "gets number of words person has used in total" },
@@ -78,7 +89,7 @@ function helpMessage(message: Message) {
     { name: "vocabsize (person)", value: "gets number of unique words person has used" },
     { name: "servervocabsize", value: "gets number of unique words server has used" },
     { name: "addname (person) (name)", value: "add an alias to avoid mentioning someone repeatedly." }
-	);
+  );
 
   message.reply({embeds: [helpEmbed]});
 }
