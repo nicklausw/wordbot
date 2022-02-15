@@ -207,16 +207,18 @@ async function getWordCount(word: string, wordTable: string): Promise<number> {
 
 async function getServerWordCount(server: string, word: string): Promise<number> {
   var serverSchema: string = "s" + server + ".";
-  var userCount: number;
-  var serverWordCount = 0;
-  var wordCounts = await queryForResults("select * from " + serverSchema + "users;");
-
-  userCount = await queryForNumber("select count(*) from " + serverSchema + "users;");
+  var wordTables = await queryForResults("select * from " + serverSchema + "users;");
+  var userCount = wordTables.length;
+  var queryString = "select sum(uses) from (";
   for(var c = 0; c < userCount; c++) {
-    var thisCount = wordCounts[c];
-    serverWordCount += await getWordCount(word, serverSchema + "u" + thisCount);
+    queryString += "select uses from " + serverSchema + "u" + wordTables[c] + " where word = \'" + word + "\'";
+    if(c === userCount - 1) {
+      queryString += ") t;";
+    } else {
+      queryString += " union all ";
+    }
   }
-  return serverWordCount;
+  return await queryForNumber(queryString);
 }
 
 async function getTotalWordCount(server: string, person: string): Promise<number> {
@@ -229,15 +231,18 @@ async function getTotalWordCount(server: string, person: string): Promise<number
 
 async function getServerTotalWordCount(server: string): Promise<number> {
   var serverSchema: string = "s" + server + ".";
-  var serverTotalWordCount = 0;
-
   var wordTables = await queryForResults("select * from " + serverSchema + "users;");
   var userCount = wordTables.length;
+  var queryString = "select sum(uses) from (";
   for(var c = 0; c < userCount; c++) {
-    var sum: number = await queryForNumber("select sum(uses) from " + serverSchema + "u" + wordTables[c] + ";");
-    serverTotalWordCount += sum;
+    queryString += "select uses from " + serverSchema + "u" + wordTables[c];
+    if(c === userCount - 1) {
+      queryString += ") t;";
+    } else {
+      queryString += " union all ";
+    }
   }
-  return serverTotalWordCount;
+  return await queryForNumber(queryString);
 }
 
 async function getVocabSize(server: string, person: string): Promise<number> {
@@ -361,23 +366,23 @@ async function allServers(message: Message) {
     }
   }
   var joinString = "";
+  var countString = "select sum(uses) from (";
   for(var c = 0; c < tableList.length; c++) {
     joinString += "select word from " + tableList[c];
+    countString += "select uses from " + tableList[c];
     if(c !== tableList.length - 1) {
       joinString += " union ";
+      countString += " union all ";
     } else {
       joinString += ";";
+      countString += ") t;";
     }
   }
 
   var uniqueWordList: any = await query(joinString);
   var vocabSize = Object.keys(uniqueWordList["results"]).length;
   
-  var wordCount = 0;
-  for(var c = 0; c < names.length; c++) {
-    var thisCount = await getServerTotalWordCount(names[c]);
-    wordCount += thisCount;
-  }
+  var wordCount = await queryForNumber(countString);
   
   message.reply("Over all servers there are " + wordCount + " words and " + vocabSize + " unique words.");
   return;
