@@ -134,7 +134,7 @@ function sqlstring(s: string): string {
 
 async function handleWord(thisword: string, wordTable: string, serverSchema: string) {
   var word = sqlstring(thisword);
-  if(word.length > 50 || word === "") {
+  if(word.length > 50 || word === "" || word.includes("http")) {
     return;
   }
   await query("insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', 1) on duplicate key update uses = uses + 1;");
@@ -384,6 +384,29 @@ async function allServers(message: Message) {
   return;
 }
 
+// below code is good if there's a word/phrase you later decide to forbid.
+/*
+async function deleteFromAllServers(message: Message) {
+  var allNames = await queryForResults("select schema_name from information_schema.schemata;");
+  var names = new Array<string>();
+  for(var c = 0; c < allNames.length; c++) {
+    if(allNames[c][0] === 's' && isNaN(allNames[c].substring(1)) === false) {
+      var userList = await queryForResults("select table_name from information_schema.tables where table_schema = '" + allNames[c] + "'");
+      for(var d = 0; d < userList.length; d++) {
+        if(userList[d][0] === 'u' && isNaN(userList[d].substring(1)) === false) {
+          names.push(allNames[c] + "." + userList[d]);
+        }
+      }
+    }
+  }
+  
+  for(var c = 0; c < names.length; c++) {
+    await query("delete from " + names[c] + " where word like '%http%';");
+  }
+  return;
+}
+*/
+
 async function handleMessage(message: Message, runCommands: boolean) {
   var serverSchema: string = "s" + message.guild!.id + ".";
   var parameters: Array<string> = message.content.toLowerCase().split(" ");
@@ -560,6 +583,14 @@ async function handleMessage(message: Message, runCommands: boolean) {
     await allServers(message);
     return;
   }
+  
+  /*
+  if(parameters[0] === "deletefromallservers") {
+    await deleteFromAllServers(message);
+    return;
+  }
+  */
+
 
   if(parameters[0] === "bitchbothelp") {
     helpMessage(message);
