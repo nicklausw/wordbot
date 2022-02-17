@@ -20,12 +20,11 @@ function closeConnection() {
   console.log("closed sql connection.");
   process.exit();
 }
-/*
+
 process.on("SIGINT", closeConnection); // ctrl+c
 process.on("SIGUSR1", closeConnection); // nodemon restart
 process.on("SIGUSR2", closeConnection); // also nodemon restart
-process.on("uncaughtException", closeConnection);
-*/
+
 // promise to get the query output.
 function query(sql = "", params = Object.create(null)) {
   return new Promise((resolve, reject) => {
