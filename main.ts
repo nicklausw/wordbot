@@ -20,12 +20,11 @@ function closeConnection() {
   console.log("closed sql connection.");
   process.exit();
 }
-/*
+
 process.on("SIGINT", closeConnection); // ctrl+c
 process.on("SIGUSR1", closeConnection); // nodemon restart
 process.on("SIGUSR2", closeConnection); // also nodemon restart
-process.on("uncaughtException", closeConnection);
-*/
+
 // promise to get the query output.
 function query(sql = "", params = Object.create(null)) {
   return new Promise((resolve, reject) => {
@@ -88,6 +87,7 @@ function helpMessage(message: Message) {
     { name: "funfacts", value: "gives you facts about your words and such." },
     { name: "favoriteword (person)", value: "gets person's most used word." },
     { name: "wordcount (person) (word)", value: "gets number of times person has used word." },
+    { name: "nwordcount (person) (word)", value: "gets number of times person has used the N word." },
     { name: "totalwordcount (person)", value: "gets number of words person has used in total" },
     { name: "serverwordcount (word)", value: "gets number of times anyone in server has used word." },
     { name: "servertotalwordcount", value: "gets total number of words used in server." },
@@ -133,7 +133,7 @@ function sqlstring(s: string): string {
 
 async function handleWord(thisword: string, wordTable: string, serverSchema: string) {
   var word = sqlstring(thisword);
-  if(word.length > 50 || word === "") {
+  if(word.length > 50 || word === "" || word.includes("http")) {
     return;
   }
   await query("insert into " + serverSchema + wordTable + " (word, uses) values (" + "\'" + word + "\', 1) on duplicate key update uses = uses + 1;");
@@ -383,16 +383,39 @@ async function allServers(message: Message) {
   return;
 }
 
+// below code is good if there's a word/phrase you later decide to forbid.
+/*
+async function deleteFromAllServers(message: Message) {
+  var allNames = await queryForResults("select schema_name from information_schema.schemata;");
+  var names = new Array<string>();
+  for(var c = 0; c < allNames.length; c++) {
+    if(allNames[c][0] === 's' && isNaN(allNames[c].substring(1)) === false) {
+      var userList = await queryForResults("select table_name from information_schema.tables where table_schema = '" + allNames[c] + "'");
+      for(var d = 0; d < userList.length; d++) {
+        if(userList[d][0] === 'u' && isNaN(userList[d].substring(1)) === false) {
+          names.push(allNames[c] + "." + userList[d]);
+        }
+      }
+    }
+  }
+  
+  for(var c = 0; c < names.length; c++) {
+    await query("delete from " + names[c] + " where word like '%http%';");
+  }
+  return;
+}
+*/
+
 async function handleMessage(message: Message, runCommands: boolean) {
   var serverSchema: string = "s" + message.guild!.id + ".";
   var parameters: Array<string> = message.content.toLowerCase().split(" ");
 
-  if(message.content.toLowerCase().startsWith("indexchannels") && runCommands) {
+  if(parameters[0] === "indexchannels" && runCommands) {
     await indexChannels(message);
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("favoriteword") && runCommands) {
+  if(parameters[0] === "favoriteword" && runCommands) {
     if(parameters.length !== 2) {
       helpMessage(message);
       return;
@@ -421,7 +444,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("wordcount") && runCommands) {
+  if(parameters[0] === "wordcount" && runCommands) {
     if(parameters.length != 3) {
       helpMessage(message);
       return;
@@ -438,8 +461,26 @@ async function handleMessage(message: Message, runCommands: boolean) {
     }
     return;
   }
+  
+  if(parameters[0] === "nwordcount" && runCommands) {
+    if(parameters.length != 2) {
+      helpMessage(message);
+      return;
+    }
+    var person: string = await resolveName(parameters[1], serverSchema + "nicknames", message);
+    if(person === "") return;
+    // not putting those words on github.
+    var letters: string = "grinea";
+    var thisWordTable: string = serverSchema + "u" + person;
+    var softCount = await getWordCount(letters[3] + letters[2] + letters[0] + letters[0] + letters[5], thisWordTable);
+    var hardCount = await getWordCount(letters[3] + letters[2] + letters[0] + letters[0] + letters[4] + letters[1], thisWordTable);
+    var outString = "user has said " + hardCount + " hard N" + (hardCount !== 1 ? "s" : "") + " ";
+    outString += "and " + softCount + " soft N" + (softCount !== 1 ? "s" : "") + ".";
+    message.reply(outString);
+    return;
+  }
 
-  if(message.content.toLowerCase().startsWith("serverwordcount") && runCommands) {
+  if(parameters[0] === "serverwordcount" && runCommands) {
     if(parameters.length != 2) {
       helpMessage(message);
       return;
@@ -454,7 +495,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("totalwordcount") && runCommands) {
+  if(parameters[0] === "totalwordcount" && runCommands) {
     if(parameters.length != 2) {
       helpMessage(message);
       return;
@@ -471,7 +512,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase() == "servertotalwordcount" && runCommands) {
+  if(parameters[0] === "servertotalwordcount" && runCommands) {
     var serverTotalWordCount = await getServerTotalWordCount(message.guild!.id);
     if(serverTotalWordCount > 0) {
       message.reply("Server has said " + serverTotalWordCount + " total words.");
@@ -481,7 +522,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("vocabsize") && runCommands) {
+  if(parameters[0] === "vocabsize" && runCommands) {
     if(parameters.length != 2) {
       helpMessage(message);
       return;
@@ -497,7 +538,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase() === "servervocabsize" && runCommands) {
+  if(parameters[0] === "servervocabsize" && runCommands) {
     var serverVocabSize = await getServerVocabSize(message.guild!.id);
     if(serverVocabSize > 0) {
       message.reply("Server has said " + serverVocabSize + " different words.");
@@ -507,7 +548,7 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("addname") && runCommands) {
+  if(parameters[0] === "addname" && runCommands) {
     if(parameters.length != 3) {
       helpMessage(message);
       return;
@@ -532,17 +573,25 @@ async function handleMessage(message: Message, runCommands: boolean) {
     return;
   }
 
-  if(message.content.toLowerCase().startsWith("funfacts")) {
+  if(parameters[0] === "funfacts") {
     await funFacts(message);
     return;
   }
   
-  if(message.content.toLowerCase() === "allservers") {
+  if(parameters[0] === "allservers") {
     await allServers(message);
     return;
   }
+  
+  /*
+  if(parameters[0] === "deletefromallservers") {
+    await deleteFromAllServers(message);
+    return;
+  }
+  */
 
-  if(message.content.toLowerCase() === "bitchbothelp") {
+
+  if(parameters[0] === "bitchbothelp") {
     helpMessage(message);
     return;
   }
