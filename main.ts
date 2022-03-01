@@ -120,7 +120,7 @@ async function resolveName(s: string, db: string, message: Message): Promise<str
 // make a string SQL-friendly.
 function sqlstring(s: string): string {
   s = s.replace("\'", "\'\'").toLowerCase();
-  const allowedSymbols = "abcdefghijklmnopqrstuvwxyz\'";
+  const allowedSymbols = "áéíóúñüabcdefghijklmnopqrstuvwxyz\'";
   var newstring = "";
   for(var c = 0; c < s.length; c++) {
     if(allowedSymbols.includes(s[c])) {
